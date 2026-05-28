@@ -138,6 +138,44 @@ def build_election_polling_model(market: Market) -> ModelDiagnostics:
     )
 
 
+def build_sports_outright_model(market: Market) -> ModelDiagnostics:
+    market_consensus = prior(market)
+    team_strength_proxy = market_consensus
+    season_stage_certainty = clamp(1.0 - days_remaining(market) / 365)
+    injury_depth_uncertainty = 0.55
+    schedule_path_clarity = 0.45 + 0.20 * season_stage_certainty
+    playoff_variance = 0.65
+    posterior = clamp(
+        0.70 * market_consensus
+        + 0.15 * team_strength_proxy
+        + 0.15 * schedule_path_clarity
+    )
+
+    return ModelDiagnostics(
+        model_name="Sports Outright Model",
+        posterior_probability=posterior,
+        confidence=0.38,
+        uncertainty_interval=interval(posterior, 0.24),
+        state_scores={
+            "team_strength_proxy": team_strength_proxy,
+            "season_stage_certainty": season_stage_certainty,
+            "schedule_path_clarity": schedule_path_clarity,
+            "injury_depth_uncertainty": injury_depth_uncertainty,
+            "playoff_variance": playoff_variance,
+            "market_consensus": market_consensus,
+        },
+        key_drivers=[
+            "Uses market price as team-strength prior until standings/odds feeds are connected.",
+            "Applies wider uncertainty because outright championships compound many games.",
+            "Tracks path clarity as the season approaches resolution.",
+        ],
+        notes=[
+            "v1 does not ingest standings, injuries, Elo, or betting odds.",
+            "Next upgrade: team ratings, bracket path, injuries, and bookmaker consensus.",
+        ],
+    )
+
+
 def build_logic_consistency_model(market: Market) -> ModelDiagnostics:
     posterior = prior(market)
     return ModelDiagnostics(

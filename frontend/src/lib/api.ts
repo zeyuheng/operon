@@ -43,6 +43,7 @@ export type EventDraft = {
   product_release?: ModelDiagnostics | null;
   macro_policy?: ModelDiagnostics | null;
   election_polling?: ModelDiagnostics | null;
+  sports_outright?: ModelDiagnostics | null;
   logic_consistency?: ModelDiagnostics | null;
   general_event?: ModelDiagnostics | null;
 };

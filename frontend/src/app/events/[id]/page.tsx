@@ -36,6 +36,7 @@ function activeDiagnostics(event: EventDraft): ModelDiagnostics | null {
     event.product_release ??
     event.macro_policy ??
     event.election_polling ??
+    event.sports_outright ??
     event.logic_consistency ??
     event.general_event ??
     null

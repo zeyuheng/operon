@@ -10,3 +10,16 @@ def test_routes_financial_barrier_market() -> None:
 def test_routes_product_release_market() -> None:
     market = Market(id="2", question="Will OpenAI release a new AI model before July?")
     assert route_model(market) == EventModelType.PRODUCT_RELEASE
+
+
+def test_routes_nomination_market_to_election() -> None:
+    market = Market(
+        id="3",
+        question="Will Gavin Newsom win the 2028 Democratic presidential nomination?",
+    )
+    assert route_model(market) == EventModelType.ELECTION_POLLING
+
+
+def test_routes_sports_outright_market() -> None:
+    market = Market(id="4", question="Will the Knicks win the 2026 NBA Finals?")
+    assert route_model(market) == EventModelType.SPORTS_OUTRIGHT

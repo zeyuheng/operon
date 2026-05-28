@@ -39,3 +39,36 @@ def test_score_market_penalizes_fallback_dominated_rules() -> None:
     assert candidate.primary_edge_source == "fallback_clause"
     assert candidate.scout_penalty > 0
     assert "fallback_dominated" in candidate.risk_flags
+
+
+def test_score_market_recognizes_nomination_as_election() -> None:
+    candidate = score_market(
+        Market(
+            id="newsom",
+            question="Will Gavin Newsom win the 2028 Democratic presidential nomination?",
+            volume=2_000_000,
+            liquidity=250_000,
+            market_probability=0.24,
+        )
+    )
+
+    assert candidate.model_type == "election_polling"
+    assert candidate.category_guess == "election"
+    assert candidate.evidence_score > 0.8
+    assert "fit=0.78" in candidate.reason
+
+
+def test_score_market_recognizes_sports_outright() -> None:
+    candidate = score_market(
+        Market(
+            id="knicks",
+            question="Will the New York Knicks win the 2026 NBA Finals?",
+            volume=2_000_000,
+            liquidity=250_000,
+            market_probability=0.20,
+        )
+    )
+
+    assert candidate.model_type == "sports_outright"
+    assert candidate.category_guess == "sports"
+    assert candidate.evidence_score > 0.8

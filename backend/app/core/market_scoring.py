@@ -8,8 +8,9 @@ CATEGORY_EVIDENCE_PRIOR = {
     "crypto": 0.90,
     "economics": 0.90,
     "politics": 0.85,
+    "election": 0.86,
     "technology": 0.80,
-    "sports": 0.78,
+    "sports": 0.84,
     "business": 0.74,
     "culture": 0.55,
     "celebrity": 0.35,
@@ -23,7 +24,7 @@ def normalized_log_score(value: float | None, cap: float) -> float:
 
 
 def evidence_availability_score(market: Market) -> float:
-    category = (market.category or "").lower()
+    category = category_guess(market)
     return CATEGORY_EVIDENCE_PRIOR.get(category, 0.60)
 
 
@@ -35,8 +36,36 @@ def category_guess(market: Market) -> str:
         return "economics"
     if any(term in text for term in ["openai", "ai", "model", "launch", "release"]):
         return "technology"
-    if any(term in text for term in ["election", "poll", "president"]):
-        return "politics"
+    if any(
+        term in text
+        for term in [
+            "election",
+            "poll",
+            "president",
+            "nomination",
+            "nominee",
+            "primary",
+            "democratic",
+            "republican",
+            "candidate",
+        ]
+    ):
+        return "election"
+    if any(
+        term in text
+        for term in [
+            "nba",
+            "nfl",
+            "nhl",
+            "mlb",
+            "stanley cup",
+            "finals",
+            "super bowl",
+            "world series",
+            "championship",
+        ]
+    ):
+        return "sports"
     return (market.category or "general").lower()
 
 
@@ -64,14 +93,42 @@ def model_fit_score(market: Market) -> float:
         return 0.84
     if any(term in text for term in ["openai", "ai", "model", "launch", "release"]):
         return 0.78
-    if "election" in text or "poll" in text:
-        return 0.68
+    if any(
+        term in text
+        for term in [
+            "election",
+            "poll",
+            "president",
+            "nomination",
+            "nominee",
+            "primary",
+            "democratic",
+            "republican",
+            "candidate",
+        ]
+    ):
+        return 0.78
+    if any(
+        term in text
+        for term in [
+            "nba",
+            "nfl",
+            "nhl",
+            "mlb",
+            "stanley cup",
+            "finals",
+            "super bowl",
+            "world series",
+            "championship",
+        ]
+    ):
+        return 0.76
     return 0.45
 
 
 def score_market(market: Market) -> MarketCandidate:
-    liquidity_score = normalized_log_score(market.liquidity, 100_000)
-    volume_score = normalized_log_score(market.volume, 1_000_000)
+    liquidity_score = normalized_log_score(market.liquidity, 500_000)
+    volume_score = normalized_log_score(market.volume, 10_000_000)
     liquidity_blend = 0.6 * liquidity_score + 0.4 * volume_score
     evidence_score = evidence_availability_score(market)
     resolution_score = resolution_clarity_score(market)

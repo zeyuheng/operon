@@ -3,6 +3,7 @@ from app.core.specialized_models import (
     build_general_event_model,
     build_macro_policy_model,
     build_product_release_model,
+    build_sports_outright_model,
 )
 from app.schemas.market import Market
 
@@ -50,3 +51,12 @@ def test_general_model_is_conservative() -> None:
     )
 
     assert diagnostics.posterior_probability < 0.9
+
+
+def test_sports_outright_model_outputs_diagnostics() -> None:
+    diagnostics = build_sports_outright_model(
+        Market(id="1", question="Will the Knicks win the NBA Finals?", market_probability=0.2)
+    )
+
+    assert diagnostics.model_name == "Sports Outright Model"
+    assert "team_strength_proxy" in diagnostics.state_scores

@@ -74,5 +74,6 @@ class EventDraft(BaseModel):
     product_release: ModelDiagnostics | None = None
     macro_policy: ModelDiagnostics | None = None
     election_polling: ModelDiagnostics | None = None
+    sports_outright: ModelDiagnostics | None = None
     logic_consistency: ModelDiagnostics | None = None
     general_event: ModelDiagnostics | None = None

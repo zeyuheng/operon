@@ -11,6 +11,7 @@ from app.core.specialized_models import (
     build_logic_consistency_model,
     build_macro_policy_model,
     build_product_release_model,
+    build_sports_outright_model,
 )
 from app.schemas.market import EventDraft, MarketCandidate
 from app.services.crypto_price_service import CryptoPriceService
@@ -42,6 +43,7 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
     product_release = None
     macro_policy = None
     election_polling = None
+    sports_outright = None
     logic_consistency = None
     general_event = None
     if candidate.model_type == "financial_barrier":
@@ -113,6 +115,21 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
             "Election model used market consensus as a polling proxy until poll ingestion "
             "is connected."
         )
+    elif candidate.model_type == "sports_outright":
+        sports_outright = build_sports_outright_model(candidate.market)
+        operon_probability = combine_probabilities(
+            scout_probability=operon_probability,
+            model_probability=sports_outright.posterior_probability,
+        )
+        append_model_result(
+            timeline,
+            "sports_outright_model",
+            sports_outright.posterior_probability,
+        )
+        evidence_items.append(
+            "Sports outright model used market consensus as a team-strength prior until "
+            "standings, injuries, and odds feeds are connected."
+        )
     elif candidate.model_type == "logic_consistency":
         logic_consistency = build_logic_consistency_model(candidate.market)
         operon_probability = combine_probabilities(
@@ -153,6 +170,7 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
         product_release=product_release,
         macro_policy=macro_policy,
         election_polling=election_polling,
+        sports_outright=sports_outright,
         logic_consistency=logic_consistency,
         general_event=general_event,
     )
