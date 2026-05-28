@@ -173,6 +173,23 @@ export default function EventPage() {
                   {percent(event.financial_barrier.hit_probability)}
                 </span>
               </div>
+              <div className="metric">
+                <span className="metric-label">Expected Value</span>
+                <span className="metric-value">
+                  {percent(event.financial_barrier.expected_contract_value)}
+                </span>
+              </div>
+              <div className="metric">
+                <span className="metric-label">Fallback</span>
+                <span className="metric-value">
+                  {percent(event.financial_barrier.fallback_probability)}
+                </span>
+              </div>
+            </div>
+            <div className="rule-box">
+              <strong>Rule Adapter: {event.financial_barrier.rule_type}</strong>
+              <p>{event.financial_barrier.rule_summary}</p>
+              <p>Valuation: {event.financial_barrier.valuation_formula}</p>
             </div>
             <p className="reason">
               {event.financial_barrier.simulations.toLocaleString()} simulations over{" "}

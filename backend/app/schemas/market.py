@@ -38,6 +38,11 @@ class FinancialBarrierDiagnostics(BaseModel):
     simulations: int
     steps: int
     hit_probability: float = Field(ge=0, le=1)
+    expected_contract_value: float = Field(ge=0, le=1)
+    fallback_probability: float = Field(default=0.0, ge=0, le=1)
+    rule_type: str = "simple_binary_barrier"
+    rule_summary: str
+    valuation_formula: str
     drift: float
     data_source: str
     notes: list[str] = Field(default_factory=list)

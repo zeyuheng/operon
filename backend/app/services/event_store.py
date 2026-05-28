@@ -37,7 +37,7 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
         if financial_barrier is not None:
             operon_probability = combine_probabilities(
                 scout_probability=operon_probability,
-                model_probability=financial_barrier.hit_probability,
+                model_probability=financial_barrier.expected_contract_value,
             )
             timeline.extend(
                 [
@@ -45,12 +45,20 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
                         "label": "barrier_model",
                         "probability": financial_barrier.hit_probability,
                     },
+                    {
+                        "label": "expected_contract_value",
+                        "probability": financial_barrier.expected_contract_value,
+                    },
                     {"label": "combined_posterior", "probability": operon_probability},
                 ]
             )
             evidence_items.append(
                 "Financial barrier model ran a Monte Carlo simulation using current "
                 f"{financial_barrier.asset} spot price and recent volatility."
+            )
+            evidence_items.append(
+                "Rule adapter applied: "
+                f"{financial_barrier.rule_type}. {financial_barrier.rule_summary}"
             )
 
     evidence_items.append("No external text evidence ledger entries have been collected yet.")

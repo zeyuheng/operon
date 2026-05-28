@@ -49,6 +49,11 @@ export type FinancialBarrierDiagnostics = {
   simulations: number;
   steps: number;
   hit_probability: number;
+  expected_contract_value: number;
+  fallback_probability: number;
+  rule_type: string;
+  rule_summary: string;
+  valuation_formula: string;
   drift: number;
   data_source: string;
   notes: string[];

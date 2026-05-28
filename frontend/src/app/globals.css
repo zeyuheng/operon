@@ -229,6 +229,19 @@ input {
   grid-column: 1 / -1;
 }
 
+.rule-box {
+  background: #f6f2e8;
+  border: 1px solid #e2d4ad;
+  border-radius: 8px;
+  color: #46391f;
+  margin-top: 14px;
+  padding: 12px;
+}
+
+.rule-box p {
+  margin: 8px 0 0;
+}
+
 .timeline {
   display: grid;
   gap: 10px;

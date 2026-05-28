@@ -4,6 +4,8 @@ import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from app.core.resolution_adapters import expected_contract_value
+from app.core.rule_parser import parse_market_rule
 from app.schemas.market import FinancialBarrierDiagnostics, Market
 
 ASSET_ALIASES = {
@@ -128,6 +130,11 @@ def build_financial_barrier_diagnostics(
         days_remaining=days_remaining,
         annualized_volatility=volatility,
     )
+    parsed_rule = parse_market_rule(market)
+    contract_value, fallback_probability, formula = expected_contract_value(
+        hit_probability=hit_probability,
+        parsed_rule=parsed_rule,
+    )
 
     return FinancialBarrierDiagnostics(
         asset=spec.asset_symbol,
@@ -139,11 +146,18 @@ def build_financial_barrier_diagnostics(
         simulations=5_000,
         steps=steps,
         hit_probability=hit_probability,
+        expected_contract_value=contract_value,
+        fallback_probability=fallback_probability,
+        rule_type=parsed_rule.rule_type.value,
+        rule_summary=parsed_rule.summary,
+        valuation_formula=formula,
         drift=0.0,
         data_source=data_source,
         notes=[
             "Uses geometric Brownian motion with zero drift.",
             "Volatility is estimated from recent daily historical prices.",
+            "Expected contract value is computed by applying the market rule adapter "
+            "to simulated outcomes.",
             "This v1 model does not yet use options implied volatility or jump risk.",
         ],
     )
