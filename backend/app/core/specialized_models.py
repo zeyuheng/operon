@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from app.core.probability_engine import logit, sigmoid
 from app.schemas.evidence import EvidenceObservation, PollSample, SportsRatingSample
 from app.schemas.market import Market, ModelDiagnostics
+from app.services.macro_data_service import MacroSnapshot
 
 
 def clamp(value: float, low: float = 0.0, high: float = 1.0) -> float:
@@ -26,8 +27,12 @@ def interval(center: float, width: float) -> list[float]:
     return [clamp(center - width), clamp(center + width)]
 
 
-def build_product_release_model(market: Market) -> ModelDiagnostics:
+def build_product_release_model(
+    market: Market,
+    evidence: list[EvidenceObservation] | None = None,
+) -> ModelDiagnostics:
     text = f"{market.question} {market.description or ''}".lower()
+    evidence = evidence or []
     official_signal = 0.75 if any(term in text for term in ["official", "announced"]) else 0.45
     technical_readiness = 0.65 if any(term in text for term in ["release", "launch"]) else 0.45
     organizational_intent = (
@@ -35,6 +40,8 @@ def build_product_release_model(market: Market) -> ModelDiagnostics:
     )
     deadline_pressure = clamp(1.0 - days_remaining(market) / 365)
     timeline_confidence = clamp(0.65 - abs(days_remaining(market) - 120) / 500)
+    evidence_effect = product_evidence_weight(evidence)
+    official_signal = clamp(official_signal + 0.30 * official_evidence_score(evidence))
 
     evidence_weight = (
         0.35 * (official_signal - 0.5)
@@ -42,6 +49,7 @@ def build_product_release_model(market: Market) -> ModelDiagnostics:
         + 0.20 * (organizational_intent - 0.5)
         + 0.15 * (deadline_pressure - 0.5)
         + 0.15 * (timeline_confidence - 0.5)
+        + evidence_effect
     )
     posterior = sigmoid(logit(prior(market)) + evidence_weight)
 
@@ -56,32 +64,41 @@ def build_product_release_model(market: Market) -> ModelDiagnostics:
             "external_pressure": deadline_pressure,
             "timeline_confidence": timeline_confidence,
             "official_signal_strength": official_signal,
+            "structured_evidence_weight": clamp(0.5 + evidence_effect),
         },
         key_drivers=[
             "Uses market-implied probability as prior.",
-            "Scores release readiness from title/rule text until external evidence is connected.",
-            "Applies deadline pressure from the market end date.",
+            "Applies Bayesian log-odds update from structured evidence.",
+            "Weights official sources above news/social sources.",
+            "Applies deadline hazard pressure from the market end date.",
         ],
         notes=[
-            "v1 does not yet call an LLM or scrape official blogs/news.",
-            "Next upgrade: evidence extraction from official sources and developer docs.",
+            "Evidence extractor uses OpenAI when configured; otherwise heuristic extraction.",
+            "Next upgrade: particle filter / SMC over latent readiness states.",
         ],
     )
 
 
-def build_macro_policy_model(market: Market) -> ModelDiagnostics:
+def build_macro_policy_model(
+    market: Market,
+    snapshot: MacroSnapshot | None = None,
+) -> ModelDiagnostics:
     text = f"{market.question} {market.description or ''}".lower()
-    inflation_trend = 0.62 if "cpi" in text or "inflation" in text else 0.50
-    labor_market_pressure = 0.58 if "unemployment" in text or "jobs" in text else 0.50
+    snapshot = snapshot or MacroSnapshot()
+    inflation_trend = macro_z_score(snapshot.cpi_yoy, center=2.5, scale=2.5)
+    labor_market_pressure = 1 - macro_z_score(snapshot.unemployment_rate, center=4.5, scale=3.0)
+    curve_pressure = yield_curve_pressure(snapshot)
     policy_reaction_function = 0.65 if "fed" in text or "rate" in text else 0.52
     market_expectation = prior(market)
-    official_guidance = 0.50
+    official_guidance = fed_policy_guidance_proxy(snapshot)
+    event_direction = macro_event_direction(text)
 
     posterior = sigmoid(
         logit(market_expectation)
-        + 0.20 * (inflation_trend - 0.5)
-        + 0.20 * (labor_market_pressure - 0.5)
-        + 0.30 * (policy_reaction_function - 0.5)
+        + event_direction * 0.25 * (inflation_trend - 0.5)
+        + event_direction * 0.20 * (labor_market_pressure - 0.5)
+        + 0.20 * (curve_pressure - 0.5)
+        + 0.25 * (policy_reaction_function - 0.5)
         + 0.15 * (official_guidance - 0.5)
     )
 
@@ -94,19 +111,71 @@ def build_macro_policy_model(market: Market) -> ModelDiagnostics:
             "inflation_trend": inflation_trend,
             "labor_market_pressure": labor_market_pressure,
             "policy_reaction_function": policy_reaction_function,
+            "yield_curve_pressure": curve_pressure,
             "market_expectation": market_expectation,
             "official_guidance": official_guidance,
         },
         key_drivers=[
             "Treats market price as consensus prior.",
-            "Applies lightweight nowcasting heuristics from the market text.",
-            "Leaves room for official data and calendar feeds.",
+            "Uses FRED public CSV for CPI, unemployment, fed funds, and Treasury yields.",
+            "Applies macro indicator z-scores in a Bayesian log-odds update.",
         ],
         notes=[
-            "v1 is a Bayesian nowcasting shell, not a live macro feed.",
-            "Next upgrade: FRED/economic calendar/latest release ingestion.",
+            f"Macro data source: {snapshot.data_source}.",
+            "Next upgrade: dynamic linear model / Kalman nowcast ensemble.",
         ],
     )
+
+
+def product_evidence_weight(evidence: list[EvidenceObservation]) -> float:
+    total = 0.0
+    seen_claims = set()
+    for item in evidence:
+        normalized_claim = item.claim.lower().strip()
+        duplicate_penalty = 0.5 if normalized_claim in seen_claims else 1.0
+        seen_claims.add(normalized_claim)
+        reliability = source_quality(item.source_type)
+        total += (
+            item.strength
+            * item.relevance
+            * reliability
+            * item.novelty
+            * (1 - 0.5 * item.ambiguity)
+            * duplicate_penalty
+        )
+    return clamp(total, -0.6, 0.6)
+
+
+def official_evidence_score(evidence: list[EvidenceObservation]) -> float:
+    official_items = [item for item in evidence if source_quality(item.source_type) >= 0.75]
+    if not official_items:
+        return 0.0
+    return clamp(sum(item.relevance * max(0, item.strength) for item in official_items) / 2)
+
+
+def macro_z_score(value: float | None, center: float, scale: float) -> float:
+    if value is None:
+        return 0.50
+    return clamp(0.5 + (value - center) / (2 * scale))
+
+
+def yield_curve_pressure(snapshot: MacroSnapshot) -> float:
+    if snapshot.two_year_yield is None or snapshot.ten_year_yield is None:
+        return 0.50
+    spread = snapshot.ten_year_yield - snapshot.two_year_yield
+    return clamp(0.5 - spread / 4)
+
+
+def fed_policy_guidance_proxy(snapshot: MacroSnapshot) -> float:
+    if snapshot.fed_funds_rate is None:
+        return 0.50
+    return clamp(0.45 + (snapshot.fed_funds_rate - 3.0) / 10)
+
+
+def macro_event_direction(text: str) -> float:
+    if any(term in text for term in ["cut", "lower", "below", "under"]):
+        return -1.0
+    return 1.0
 
 
 def build_election_polling_model(

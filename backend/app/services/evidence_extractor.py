@@ -11,6 +11,9 @@ from app.schemas.market import Market
 class EvidenceExtractor:
     async def extract_from_market_text(self, market: Market) -> list[EvidenceObservation]:
         text = f"{market.question}\n{market.description or ''}".strip()
+        return await self.extract_from_text(text)
+
+    async def extract_from_text(self, text: str) -> list[EvidenceObservation]:
         if settings.openai_api_key:
             try:
                 return await self._extract_with_openai(text)

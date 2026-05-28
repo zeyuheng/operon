@@ -17,6 +17,8 @@ from app.core.specialized_models import (
 from app.schemas.market import EventDraft, MarketCandidate
 from app.services.crypto_price_service import CryptoPriceService
 from app.services.evidence_extractor import EvidenceExtractor
+from app.services.macro_data_service import MacroDataService, MacroSnapshot
+from app.services.product_evidence_service import ProductEvidenceService
 
 EVENT_STORE: dict[str, EventDraft] = {}
 
@@ -85,7 +87,14 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
                 f"{financial_barrier.rule_type}. {financial_barrier.rule_summary}"
             )
     elif candidate.model_type == "product_release":
-        product_release = build_product_release_model(candidate.market)
+        product_observations = await ProductEvidenceService().fetch_evidence(candidate.market)
+        observations.extend(product_observations)
+        evidence_items.extend(
+            f"Product evidence: {item.claim} "
+            f"(source={item.source_type}, strength={item.strength:.2f})"
+            for item in product_observations[:4]
+        )
+        product_release = build_product_release_model(candidate.market, observations)
         model_confidence = product_release.confidence
         operon_probability = combine_probabilities(
             scout_probability=operon_probability,
@@ -101,7 +110,8 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
             "deadline pressure, and official-signal placeholders."
         )
     elif candidate.model_type == "macro_policy":
-        macro_policy = build_macro_policy_model(candidate.market)
+        macro_snapshot = await fetch_macro_snapshot()
+        macro_policy = build_macro_policy_model(candidate.market, macro_snapshot)
         model_confidence = macro_policy.confidence
         operon_probability = combine_probabilities(
             scout_probability=operon_probability,
@@ -228,6 +238,13 @@ async def run_financial_barrier_model(candidate: MarketCandidate):
         historical_prices=historical_prices,
         data_source=data_source,
     )
+
+
+async def fetch_macro_snapshot() -> MacroSnapshot:
+    try:
+        return await MacroDataService().fetch_snapshot()
+    except Exception:
+        return MacroSnapshot(data_source="fallback empty macro snapshot")
 
 
 def combine_probabilities(scout_probability: float, model_probability: float) -> float:

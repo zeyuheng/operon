@@ -4,11 +4,14 @@ from app.core.specialized_models import (
     build_macro_policy_model,
     build_product_release_model,
     build_sports_outright_model,
+    macro_z_score,
+    product_evidence_weight,
     simulate_outright_probability,
     weighted_polling_average,
 )
-from app.schemas.evidence import PollSample
+from app.schemas.evidence import EvidenceDirection, EvidenceObservation, PollSample
 from app.schemas.market import Market
+from app.services.macro_data_service import MacroSnapshot
 
 
 def assert_diagnostics_are_bounded(posterior: float, interval: list[float]) -> None:
@@ -19,7 +22,18 @@ def assert_diagnostics_are_bounded(posterior: float, interval: list[float]) -> N
 
 def test_product_release_model_outputs_diagnostics() -> None:
     diagnostics = build_product_release_model(
-        Market(id="1", question="Will OpenAI release GPT-5 before July?", market_probability=0.4)
+        Market(id="1", question="Will OpenAI release GPT-5 before July?", market_probability=0.4),
+        [
+            EvidenceObservation(
+                claim="Official docs show release preparation.",
+                source_type="official",
+                direction=EvidenceDirection.POSITIVE,
+                relevance=0.8,
+                strength=0.4,
+                novelty=0.7,
+                ambiguity=0.2,
+            )
+        ],
     )
 
     assert diagnostics.model_name == "Product Release Model"
@@ -32,7 +46,8 @@ def test_product_release_model_outputs_diagnostics() -> None:
 
 def test_macro_policy_model_outputs_diagnostics() -> None:
     diagnostics = build_macro_policy_model(
-        Market(id="1", question="Will Fed cut rates in June?", market_probability=0.3)
+        Market(id="1", question="Will Fed cut rates in June?", market_probability=0.3),
+        MacroSnapshot(cpi_yoy=3.2, unemployment_rate=4.0, fed_funds_rate=5.0),
     )
 
     assert diagnostics.model_name == "Macro Policy Model"
@@ -86,3 +101,25 @@ def test_sports_monte_carlo_probability_is_bounded() -> None:
     )
 
     assert 0 <= probability <= 1
+
+
+def test_product_evidence_weight_uses_reliability() -> None:
+    weight = product_evidence_weight(
+        [
+            EvidenceObservation(
+                claim="Official launch signal.",
+                source_type="official",
+                direction=EvidenceDirection.POSITIVE,
+                relevance=1.0,
+                strength=0.5,
+                novelty=1.0,
+                ambiguity=0.0,
+            )
+        ]
+    )
+
+    assert weight > 0
+
+
+def test_macro_z_score_is_bounded() -> None:
+    assert 0 <= macro_z_score(10, center=2, scale=1) <= 1
