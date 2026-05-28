@@ -19,3 +19,21 @@ class MarketCandidate(BaseModel):
     market: Market
     operon_score: float = Field(ge=0, le=1)
     reason: str
+    model_type: str
+    category_guess: str
+    risk_flags: list[str] = Field(default_factory=list)
+    selected_reason: str
+    resolution_score: float = Field(ge=0, le=1)
+    evidence_score: float = Field(ge=0, le=1)
+    liquidity_score: float = Field(ge=0, le=1)
+
+
+class EventDraft(BaseModel):
+    id: str
+    market: Market
+    model_type: str
+    market_probability: float | None = Field(default=None, ge=0, le=1)
+    operon_probability: float = Field(ge=0, le=1)
+    evidence_items: list[str] = Field(default_factory=list)
+    probability_timeline: list[dict[str, float | str]] = Field(default_factory=list)
+    risk_flags: list[str] = Field(default_factory=list)

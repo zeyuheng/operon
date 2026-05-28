@@ -1,16 +1,16 @@
 # Operon Frontend
 
-Frontend scaffold placeholder.
+Next.js frontend for the Operon Market Scout and event dashboard.
 
-Recommended v1 stack:
+## Development
 
-- Next.js
-- TypeScript
-- Tailwind CSS
-- shadcn/ui or a small local component system
+```bash
+npm install
+npm run dev
+```
 
-Initial pages:
+The backend should be running at:
 
-- `/scout`: ranked market candidates
-- `/events/[id]`: event probability dashboard
-- `/evidence`: evidence ledger
+```text
+http://127.0.0.1:8000
+```

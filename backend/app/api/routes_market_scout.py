@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from app.core.market_filters import is_viable_market
 from app.core.market_scoring import score_market
 from app.core.model_router import route_model
-from app.schemas.market import MarketCandidate
+from app.schemas.market import EventDraft, Market, MarketCandidate
+from app.services.event_store import get_event, promote_candidate_to_event
 from app.services.polymarket_gamma_service import PolymarketGammaService
 
 router = APIRouter()
@@ -23,12 +24,18 @@ async def run_market_scout(
 
 @router.get("/model-route")
 def get_model_route(question: str) -> dict[str, str]:
-    candidate = MarketCandidate(
-        market={
-            "id": "ad-hoc",
-            "question": question,
-        },
-        operon_score=0.5,
-        reason="ad-hoc route preview",
-    )
-    return {"model_type": route_model(candidate.market)}
+    market = Market(id="ad-hoc", question=question)
+    return {"model_type": route_model(market)}
+
+
+@router.post("/promote-to-event", response_model=EventDraft)
+def promote_to_event(candidate: MarketCandidate) -> EventDraft:
+    return promote_candidate_to_event(candidate)
+
+
+@router.get("/events/{event_id}", response_model=EventDraft)
+def read_event(event_id: str) -> EventDraft:
+    event = get_event(event_id)
+    if event is None:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return event

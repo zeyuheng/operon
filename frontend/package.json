@@ -1,0 +1,22 @@
+{
+  "name": "operon-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -H 127.0.0.1 -p 3000",
+    "build": "next build",
+    "start": "next start -H 127.0.0.1 -p 3000",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "^16.2.6",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.34",
+    "@types/react": "19.0.12",
+    "@types/react-dom": "19.0.4",
+    "typescript": "5.8.3"
+  }
+}
