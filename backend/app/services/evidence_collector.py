@@ -87,6 +87,18 @@ class EvidenceCollector:
             ]
 
         snippets = text[:4_000]
+        if is_blocked_search_text(snippets):
+            return [
+                EvidenceObservation(
+                    claim=f"Search blocked by provider challenge: {item.query}",
+                    source_type="source_failed",
+                    direction=EvidenceDirection.NEUTRAL,
+                    relevance=0.20,
+                    strength=0.0,
+                    novelty=0.1,
+                    ambiguity=0.9,
+                )
+            ]
         observations = await extractor.extract_from_text(snippets)
         for observation in observations:
             observation.source_type = "web_search"
@@ -99,3 +111,16 @@ def clean_html(html: str) -> str:
     text = re.sub(r"<style[\s\S]*?</style>", " ", text, flags=re.IGNORECASE)
     text = re.sub(r"<[^>]+>", " ", text)
     return re.sub(r"\s+", " ", text).strip()
+
+
+def is_blocked_search_text(text: str) -> bool:
+    normalized = text.lower()
+    blocked_markers = [
+        "please complete the following challenge",
+        "confirm this search was made by a human",
+        "unfortunately, bots use duckduckgo too",
+        "captcha",
+        "access denied",
+        "unusual traffic",
+    ]
+    return any(marker in normalized for marker in blocked_markers)

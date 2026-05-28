@@ -11,6 +11,7 @@ from app.core.specialized_models import (
 )
 from app.schemas.evidence import EvidenceDirection, EvidenceObservation, PollSample
 from app.schemas.market import Market
+from app.services.evidence_collector import is_blocked_search_text
 from app.services.macro_data_service import MacroSnapshot
 
 
@@ -123,3 +124,10 @@ def test_product_evidence_weight_uses_reliability() -> None:
 
 def test_macro_z_score_is_bounded() -> None:
     assert 0 <= macro_z_score(10, center=2, scale=1) <= 1
+
+
+def test_search_challenge_text_is_not_treated_as_evidence() -> None:
+    assert is_blocked_search_text(
+        "DuckDuckGo Unfortunately, bots use DuckDuckGo too. "
+        "Please complete the following challenge to confirm this search was made by a human."
+    )

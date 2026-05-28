@@ -1,3 +1,5 @@
+import json
+from pathlib import Path
 from uuid import uuid4
 
 from app.core.consensus_guardrail import build_consensus_guardrail
@@ -23,6 +25,29 @@ from app.services.product_evidence_service import ProductEvidenceService
 from app.services.research_planner_service import ResearchPlannerService
 
 EVENT_STORE: dict[str, EventDraft] = {}
+EVENT_STORE_PATH = Path(__file__).resolve().parents[2] / "data" / "events.json"
+
+
+def load_events() -> None:
+    if not EVENT_STORE_PATH.exists():
+        return
+    try:
+        raw_events = json.loads(EVENT_STORE_PATH.read_text(encoding="utf-8"))
+        EVENT_STORE.clear()
+        for raw_event in raw_events:
+            event = EventDraft.model_validate(raw_event)
+            EVENT_STORE[event.id] = event
+    except Exception:
+        EVENT_STORE.clear()
+
+
+def save_events() -> None:
+    EVENT_STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    payload = [event.model_dump(mode="json") for event in EVENT_STORE.values()]
+    EVENT_STORE_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+load_events()
 
 
 async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
@@ -221,6 +246,7 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
         general_event=general_event,
     )
     EVENT_STORE[event.id] = event
+    save_events()
     return event
 
 
