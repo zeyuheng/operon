@@ -287,6 +287,196 @@ input {
   color: var(--foreground);
 }
 
+.model-viz {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  padding: 16px;
+  position: relative;
+}
+
+.model-viz::before {
+  background: linear-gradient(90deg, #236b5a, #7a9c54, #c88745);
+  content: "";
+  height: 4px;
+  inset: 0 0 auto;
+  position: absolute;
+}
+
+.viz-header {
+  align-items: start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.viz-header h2 {
+  margin: 4px 0 6px;
+}
+
+.viz-header p {
+  color: var(--muted);
+  margin: 0;
+  max-width: 720px;
+}
+
+.viz-header strong {
+  background: #e8f0eb;
+  border-radius: 8px;
+  color: var(--accent-strong);
+  padding: 10px 12px;
+  white-space: nowrap;
+}
+
+.viz-flow {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-top: 18px;
+}
+
+.viz-flow div {
+  background: #f8faf7;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: #2c3f37;
+  font-size: 13px;
+  min-height: 54px;
+  padding: 12px;
+  position: relative;
+}
+
+.viz-flow div:not(:last-child)::after {
+  color: var(--accent);
+  content: ">";
+  font-weight: 800;
+  position: absolute;
+  right: -11px;
+  top: 16px;
+  z-index: 1;
+}
+
+.viz-state-map {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-top: 16px;
+}
+
+.viz-node {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  min-height: 128px;
+  padding: 12px;
+  position: relative;
+}
+
+.viz-node span {
+  color: var(--muted);
+  font-size: 12px;
+  min-height: 32px;
+}
+
+.viz-node strong {
+  font-size: 18px;
+}
+
+.node-ring {
+  --node-value: 0.5;
+  aspect-ratio: 1;
+  background:
+    radial-gradient(circle at center, #fff 52%, transparent 53%),
+    conic-gradient(var(--accent) calc(var(--node-value) * 1turn), #dce5de 0);
+  border-radius: 50%;
+  bottom: 12px;
+  height: 36px;
+  position: absolute;
+  right: 12px;
+}
+
+.viz-columns {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 16px;
+}
+
+.viz-gauge {
+  background: #f8faf7;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.viz-gauge span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.gauge-track,
+.barrier-track {
+  background: #dce5de;
+  border-radius: 999px;
+  height: 12px;
+  overflow: hidden;
+  position: relative;
+}
+
+.gauge-fill,
+.barrier-fill {
+  background: var(--accent);
+  height: 100%;
+}
+
+.barrier-track {
+  height: 18px;
+  margin-top: 22px;
+  overflow: visible;
+}
+
+.barrier-track span {
+  color: var(--muted);
+  font-size: 12px;
+  position: absolute;
+  top: -20px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.barrier-track span:last-of-type {
+  transform: translateX(-100%);
+}
+
+.viz-product::before {
+  background: linear-gradient(90deg, #236b5a, #5e8b7d, #c88745);
+}
+
+.viz-macro::before {
+  background: linear-gradient(90deg, #334b68, #6e7f54, #c88745);
+}
+
+.viz-election::before {
+  background: linear-gradient(90deg, #3c5d86, #78689a, #b66a55);
+}
+
+.viz-sports::before {
+  background: linear-gradient(90deg, #1f6b4f, #7a9c54, #d08b3e);
+}
+
+.viz-logic::before {
+  background: linear-gradient(90deg, #34495e, #236b5a, #8a5b13);
+}
+
+.viz-general::before {
+  background: linear-gradient(90deg, #62706a, #236b5a, #c88745);
+}
+
 .bar {
   background: #dde4df;
   border-radius: 999px;
@@ -330,5 +520,22 @@ input {
 
   .metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .viz-flow,
+  .viz-state-map,
+  .viz-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .viz-flow div:not(:last-child)::after {
+    bottom: -16px;
+    content: "v";
+    right: 50%;
+    top: auto;
+  }
+
+  .viz-header {
+    display: grid;
   }
 }

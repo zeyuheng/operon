@@ -43,6 +43,160 @@ function activeDiagnostics(event: EventDraft): ModelDiagnostics | null {
   );
 }
 
+function topStates(diagnostics: ModelDiagnostics | null, limit = 5) {
+  if (!diagnostics) {
+    return [];
+  }
+  return Object.entries(diagnostics.state_scores)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit);
+}
+
+function ModelRunVisualization({
+  event,
+  diagnostics,
+}: {
+  event: EventDraft;
+  diagnostics: ModelDiagnostics | null;
+}) {
+  if (event.financial_barrier) {
+    const barrier = event.financial_barrier;
+    const spotRatio = Math.min(100, (barrier.spot_price / barrier.barrier_price) * 100);
+    return (
+      <div className="model-viz viz-financial">
+        <div className="viz-header">
+          <div>
+            <span className="metric-label">Model Run</span>
+            <h2>Barrier Simulation</h2>
+          </div>
+          <strong>{percent(barrier.expected_contract_value)} expected value</strong>
+        </div>
+        <div className="barrier-track">
+          <span style={{ left: `${spotRatio}%` }}>spot</span>
+          <span style={{ left: "100%" }}>barrier</span>
+          <div className="barrier-fill" style={{ width: `${spotRatio}%` }} />
+        </div>
+        <div className="viz-flow">
+          <div>Parse rule</div>
+          <div>Fetch price</div>
+          <div>Estimate vol</div>
+          <div>Simulate paths</div>
+          <div>Apply payoff</div>
+        </div>
+        <div className="viz-columns">
+          <VizGauge label="Hit probability" value={barrier.hit_probability} />
+          <VizGauge label="Fallback probability" value={barrier.fallback_probability} />
+          <VizGauge label="Annual volatility" value={barrier.annualized_volatility} />
+        </div>
+      </div>
+    );
+  }
+
+  if (!diagnostics) {
+    return null;
+  }
+
+  const configs: Record<string, { title: string; subtitle: string; stages: string[]; accent: string }> = {
+    product_release: {
+      title: "Latent Readiness Update",
+      subtitle: "Evidence activates readiness, intent, timeline, and official-source states.",
+      stages: ["Read market", "Plan sources", "Extract evidence", "Update latent state", "Posterior"],
+      accent: "viz-product",
+    },
+    macro_policy: {
+      title: "Macro Nowcast Factor Stack",
+      subtitle: "Market prior is adjusted by inflation, labor, yield curve, and policy factors.",
+      stages: ["Market prior", "FRED indicators", "Z-scores", "Policy reaction", "Posterior"],
+      accent: "viz-macro",
+    },
+    election_polling: {
+      title: "Polling Aggregation Pipeline",
+      subtitle: "Poll-like samples are weighted by source quality, sample size, and recency decay.",
+      stages: ["Market prior", "Poll samples", "Recency decay", "Field adjustment", "Posterior"],
+      accent: "viz-election",
+    },
+    sports_outright: {
+      title: "Outright Title Simulation",
+      subtitle: "Market-implied team strength is tested against a noisy field of contenders.",
+      stages: ["Team prior", "Field ratings", "Path clarity", "Monte Carlo", "Title odds"],
+      accent: "viz-sports",
+    },
+    logic_consistency: {
+      title: "Probability Constraint Graph",
+      subtitle: "Related markets are checked for monotonicity, exclusivity, and bound breaks.",
+      stages: ["Parse claims", "Link markets", "Check bounds", "Project graph", "Flag breaks"],
+      accent: "viz-logic",
+    },
+    general_event: {
+      title: "General Evidence Update",
+      subtitle: "Weak evidence is source-weighted and conservatively shrunk toward uncertainty.",
+      stages: ["Collect evidence", "Score sources", "Penalty", "Shrink prior", "Posterior"],
+      accent: "viz-general",
+    },
+  };
+  const config = configs[event.model_type] ?? configs.general_event;
+  return <GenericModelViz diagnostics={diagnostics} {...config} />;
+}
+
+function GenericModelViz({
+  title,
+  subtitle,
+  diagnostics,
+  stages,
+  accent,
+}: {
+  title: string;
+  subtitle: string;
+  diagnostics: ModelDiagnostics;
+  stages: string[];
+  accent: string;
+}) {
+  const states = topStates(diagnostics, 5);
+  return (
+    <div className={`model-viz ${accent}`}>
+      <div className="viz-header">
+        <div>
+          <span className="metric-label">Model Run</span>
+          <h2>{title}</h2>
+          <p>{subtitle}</p>
+        </div>
+        <strong>{percent(diagnostics.posterior_probability)} posterior</strong>
+      </div>
+      <div className="viz-flow">
+        {stages.map((stage) => (
+          <div key={stage}>{stage}</div>
+        ))}
+      </div>
+      <div className="viz-state-map">
+        {states.map(([name, value], index) => (
+          <div className="viz-node" key={name} style={{ ["--node-index" as string]: index }}>
+            <span>{name}</span>
+            <strong>{percent(value)}</strong>
+            <div className="node-ring" style={{ ["--node-value" as string]: value }} />
+          </div>
+        ))}
+      </div>
+      <div className="viz-columns">
+        <VizGauge label="Confidence" value={diagnostics.confidence} />
+        <VizGauge label="Lower bound" value={diagnostics.uncertainty_interval[0]} />
+        <VizGauge label="Upper bound" value={diagnostics.uncertainty_interval[1]} />
+      </div>
+    </div>
+  );
+}
+
+function VizGauge({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="viz-gauge">
+      <span>{label}</span>
+      <div className="gauge-track">
+        <div className="gauge-fill" style={{ width: `${Math.round(value * 100)}%` }} />
+      </div>
+      <strong>{percent(value)}</strong>
+    </div>
+  );
+}
+
 export default function EventPage() {
   const params = useParams<{ id: string }>();
   const [event, setEvent] = useState<EventDraft | null>(null);
@@ -206,7 +360,7 @@ export default function EventPage() {
                 <strong>Required Variables</strong>
                 {event.research_plan.requirements.map((item) => (
                   <p key={item.name}>
-                    {item.priority}: {item.name} — {item.reason}
+                    {item.priority}: {item.name} - {item.reason}
                   </p>
                 ))}
               </div>
@@ -214,7 +368,7 @@ export default function EventPage() {
                 <strong>Source Plan</strong>
                 {event.research_plan.source_plan.map((item) => (
                   <p key={`${item.source_type}-${item.variable}-${item.query}`}>
-                    {item.source_type}: {item.variable} — {item.query}
+                    {item.source_type}: {item.variable} - {item.query}
                   </p>
                 ))}
               </div>
@@ -237,6 +391,10 @@ export default function EventPage() {
               <p key={item}>{item}</p>
             ))}
           </div>
+        </div>
+
+        <div className="panel wide">
+          <ModelRunVisualization event={event} diagnostics={diagnostics} />
         </div>
 
         <div className="panel">
