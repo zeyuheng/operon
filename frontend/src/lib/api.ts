@@ -36,6 +36,22 @@ export type EventDraft = {
   evidence_items: string[];
   probability_timeline: Array<{ label: string; probability: number }>;
   risk_flags: string[];
+  financial_barrier?: FinancialBarrierDiagnostics | null;
+};
+
+export type FinancialBarrierDiagnostics = {
+  asset: string;
+  spot_price: number;
+  barrier_price: number;
+  deadline?: string | null;
+  days_remaining: number;
+  annualized_volatility: number;
+  simulations: number;
+  steps: number;
+  hit_probability: number;
+  drift: number;
+  data_source: string;
+  notes: string[];
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

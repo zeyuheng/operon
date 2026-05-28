@@ -13,6 +13,24 @@ function percent(value?: number | null) {
   return `${Math.round(value * 100)}%`;
 }
 
+function currency(value?: number | null) {
+  if (value === null || value === undefined) {
+    return "n/a";
+  }
+  return new Intl.NumberFormat("en", {
+    currency: "USD",
+    maximumFractionDigits: 0,
+    style: "currency",
+  }).format(value);
+}
+
+function number(value?: number | null) {
+  if (value === null || value === undefined) {
+    return "n/a";
+  }
+  return new Intl.NumberFormat("en", { maximumFractionDigits: 1 }).format(value);
+}
+
 export default function EventPage() {
   const params = useParams<{ id: string }>();
   const [event, setEvent] = useState<EventDraft | null>(null);
@@ -118,6 +136,56 @@ export default function EventPage() {
             ))}
           </div>
         </div>
+
+        {event.financial_barrier ? (
+          <div className="panel wide">
+            <h2>Financial Barrier Model</h2>
+            <div className="metrics">
+              <div className="metric">
+                <span className="metric-label">Asset</span>
+                <span className="metric-value">{event.financial_barrier.asset}</span>
+              </div>
+              <div className="metric">
+                <span className="metric-label">Spot Price</span>
+                <span className="metric-value">{currency(event.financial_barrier.spot_price)}</span>
+              </div>
+              <div className="metric">
+                <span className="metric-label">Barrier</span>
+                <span className="metric-value">
+                  {currency(event.financial_barrier.barrier_price)}
+                </span>
+              </div>
+              <div className="metric">
+                <span className="metric-label">Days Left</span>
+                <span className="metric-value">
+                  {number(event.financial_barrier.days_remaining)}
+                </span>
+              </div>
+              <div className="metric">
+                <span className="metric-label">Annual Vol</span>
+                <span className="metric-value">
+                  {percent(event.financial_barrier.annualized_volatility)}
+                </span>
+              </div>
+              <div className="metric">
+                <span className="metric-label">Hit Probability</span>
+                <span className="metric-value">
+                  {percent(event.financial_barrier.hit_probability)}
+                </span>
+              </div>
+            </div>
+            <p className="reason">
+              {event.financial_barrier.simulations.toLocaleString()} simulations over{" "}
+              {event.financial_barrier.steps} time steps. Data source:{" "}
+              {event.financial_barrier.data_source}.
+            </p>
+            <div className="evidence-list">
+              {event.financial_barrier.notes.map((note) => (
+                <p key={note}>{note}</p>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </section>
     </>
   );

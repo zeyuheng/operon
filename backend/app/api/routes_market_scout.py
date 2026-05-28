@@ -29,8 +29,8 @@ def get_model_route(question: str) -> dict[str, str]:
 
 
 @router.post("/promote-to-event", response_model=EventDraft)
-def promote_to_event(candidate: MarketCandidate) -> EventDraft:
-    return promote_candidate_to_event(candidate)
+async def promote_to_event(candidate: MarketCandidate) -> EventDraft:
+    return await promote_candidate_to_event(candidate)
 
 
 @router.get("/events/{event_id}", response_model=EventDraft)

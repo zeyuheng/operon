@@ -225,6 +225,10 @@ input {
   margin: 0 0 12px;
 }
 
+.panel.wide {
+  grid-column: 1 / -1;
+}
+
 .timeline {
   display: grid;
   gap: 10px;
