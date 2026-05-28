@@ -15,6 +15,7 @@ from app.core.specialized_models import (
 )
 from app.schemas.market import EventDraft, MarketCandidate
 from app.services.crypto_price_service import CryptoPriceService
+from app.services.evidence_extractor import EvidenceExtractor
 
 EVENT_STORE: dict[str, EventDraft] = {}
 
@@ -39,6 +40,12 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
         candidate.selected_reason,
         f"Initial scout scores: {candidate.reason}",
     ]
+    observations = await EvidenceExtractor().extract_from_market_text(candidate.market)
+    evidence_items.extend(
+        f"Extracted evidence: {item.claim} "
+        f"(direction={item.direction}, strength={item.strength:.2f}, source={item.source_type})"
+        for item in observations[:4]
+    )
     financial_barrier = None
     product_release = None
     macro_policy = None
@@ -101,7 +108,7 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
             "and macro-state placeholders."
         )
     elif candidate.model_type == "election_polling":
-        election_polling = build_election_polling_model(candidate.market)
+        election_polling = build_election_polling_model(candidate.market, observations)
         operon_probability = combine_probabilities(
             scout_probability=operon_probability,
             model_probability=election_polling.posterior_probability,
@@ -116,7 +123,7 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
             "is connected."
         )
     elif candidate.model_type == "sports_outright":
-        sports_outright = build_sports_outright_model(candidate.market)
+        sports_outright = build_sports_outright_model(candidate.market, observations)
         operon_probability = combine_probabilities(
             scout_probability=operon_probability,
             model_probability=sports_outright.posterior_probability,

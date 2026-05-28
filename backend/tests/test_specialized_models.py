@@ -4,7 +4,10 @@ from app.core.specialized_models import (
     build_macro_policy_model,
     build_product_release_model,
     build_sports_outright_model,
+    simulate_outright_probability,
+    weighted_polling_average,
 )
+from app.schemas.evidence import PollSample
 from app.schemas.market import Market
 
 
@@ -60,3 +63,26 @@ def test_sports_outright_model_outputs_diagnostics() -> None:
 
     assert diagnostics.model_name == "Sports Outright Model"
     assert "team_strength_proxy" in diagnostics.state_scores
+
+
+def test_weighted_polling_average_respects_recency_and_quality() -> None:
+    average, weight = weighted_polling_average(
+        [
+            PollSample(candidate="A", support=0.40, pollster_quality=0.9, age_days=5),
+            PollSample(candidate="A", support=0.20, pollster_quality=0.3, age_days=90),
+        ]
+    )
+
+    assert average > 0.30
+    assert weight > 0
+
+
+def test_sports_monte_carlo_probability_is_bounded() -> None:
+    probability = simulate_outright_probability(
+        target_rating=0.55,
+        field_ratings=[0.55, 0.45, 0.40, 0.35],
+        path_clarity=0.6,
+        simulations=200,
+    )
+
+    assert 0 <= probability <= 1

@@ -1,6 +1,9 @@
+import math
+import random
 from datetime import UTC, datetime
 
 from app.core.probability_engine import logit, sigmoid
+from app.schemas.evidence import EvidenceObservation, PollSample, SportsRatingSample
 from app.schemas.market import Market, ModelDiagnostics
 
 
@@ -106,58 +109,83 @@ def build_macro_policy_model(market: Market) -> ModelDiagnostics:
     )
 
 
-def build_election_polling_model(market: Market) -> ModelDiagnostics:
+def build_election_polling_model(
+    market: Market,
+    evidence: list[EvidenceObservation] | None = None,
+) -> ModelDiagnostics:
     market_consensus = prior(market)
-    polling_average = market_consensus
-    recency_weight = 0.50
-    pollster_quality = 0.50
-    correlation_risk = 0.60
-    uncertainty = 0.20 + 0.10 * correlation_risk
-    posterior = clamp(0.80 * market_consensus + 0.20 * polling_average)
+    evidence = evidence or []
+    polls = derive_poll_samples(market, evidence)
+    polling_average, poll_weight = weighted_polling_average(polls)
+    field_score = candidate_field_score(market, evidence)
+    recency_weight = clamp(poll_weight / max(len(polls), 1))
+    pollster_quality = sum(poll.pollster_quality for poll in polls) / max(len(polls), 1)
+    correlation_risk = 0.55 + 0.20 * (1 - recency_weight)
+    market_precision = 5.0
+    poll_precision = max(1.0, poll_weight)
+    field_adjustment = 0.35 * (field_score - 0.5)
+    posterior = sigmoid(
+        (
+            market_precision * logit(market_consensus)
+            + poll_precision * logit(polling_average)
+        )
+        / (market_precision + poll_precision)
+        + field_adjustment
+    )
+    uncertainty = clamp(0.12 + 0.16 * correlation_risk + 0.10 * (1 - pollster_quality), 0.12, 0.35)
 
     return ModelDiagnostics(
         model_name="Election / Polling Model",
         posterior_probability=posterior,
-        confidence=0.36,
+        confidence=clamp(0.25 + 0.45 * recency_weight + 0.20 * pollster_quality),
         uncertainty_interval=interval(posterior, uncertainty),
         state_scores={
             "weighted_polling_average": polling_average,
             "pollster_quality": pollster_quality,
             "recency_weight": recency_weight,
             "state_national_correlation_risk": correlation_risk,
+            "candidate_field_strength": field_score,
             "market_consensus": market_consensus,
         },
         key_drivers=[
-            "Uses market price as polling proxy until poll ingestion is available.",
-            "Applies a wide uncertainty band for correlated polling errors.",
+            "Aggregates poll-like samples with pollster-quality and recency decay weights.",
+            "Combines market prior and polling likelihood in log-odds space.",
+            "Adds candidate-field adjustment for entry/exit, endorsements, and consolidation.",
         ],
         notes=[
-            "v1 does not ingest real polls.",
-            "Next upgrade: pollster weighting, recency decay, and correlation model.",
+            "If no external polls are loaded, market price becomes a low-weight consensus poll.",
+            "Next upgrade: live poll ingestion, delegate simulation, fundraising, endorsements.",
         ],
     )
 
 
-def build_sports_outright_model(market: Market) -> ModelDiagnostics:
+def build_sports_outright_model(
+    market: Market,
+    evidence: list[EvidenceObservation] | None = None,
+) -> ModelDiagnostics:
     market_consensus = prior(market)
-    team_strength_proxy = market_consensus
+    evidence = evidence or []
+    ratings = derive_sports_ratings(market, evidence)
+    team_strength_proxy = ratings[0].rating
     season_stage_certainty = clamp(1.0 - days_remaining(market) / 365)
-    injury_depth_uncertainty = 0.55
+    injury_depth_uncertainty = injury_uncertainty(evidence)
     schedule_path_clarity = 0.45 + 0.20 * season_stage_certainty
     playoff_variance = 0.65
-    posterior = clamp(
-        0.70 * market_consensus
-        + 0.15 * team_strength_proxy
-        + 0.15 * schedule_path_clarity
+    monte_carlo_probability = simulate_outright_probability(
+        target_rating=team_strength_proxy,
+        field_ratings=[rating.rating for rating in ratings],
+        path_clarity=schedule_path_clarity,
     )
+    posterior = clamp(0.50 * market_consensus + 0.50 * monte_carlo_probability)
 
     return ModelDiagnostics(
         model_name="Sports Outright Model",
         posterior_probability=posterior,
-        confidence=0.38,
+        confidence=clamp(0.28 + 0.30 * season_stage_certainty + 0.20 * schedule_path_clarity),
         uncertainty_interval=interval(posterior, 0.24),
         state_scores={
             "team_strength_proxy": team_strength_proxy,
+            "monte_carlo_title_probability": monte_carlo_probability,
             "season_stage_certainty": season_stage_certainty,
             "schedule_path_clarity": schedule_path_clarity,
             "injury_depth_uncertainty": injury_depth_uncertainty,
@@ -165,15 +193,140 @@ def build_sports_outright_model(market: Market) -> ModelDiagnostics:
             "market_consensus": market_consensus,
         },
         key_drivers=[
-            "Uses market price as team-strength prior until standings/odds feeds are connected.",
-            "Applies wider uncertainty because outright championships compound many games.",
-            "Tracks path clarity as the season approaches resolution.",
+            "Converts market consensus into a team-strength prior.",
+            "Runs a simple field Monte Carlo over championship outcomes.",
+            "Adjusts confidence for season stage, path clarity, and injury uncertainty.",
         ],
         notes=[
-            "v1 does not ingest standings, injuries, Elo, or betting odds.",
+            "If no standings/odds feeds are loaded, ratings are synthesized from market prior.",
             "Next upgrade: team ratings, bracket path, injuries, and bookmaker consensus.",
         ],
     )
+
+
+def derive_poll_samples(
+    market: Market,
+    evidence: list[EvidenceObservation],
+) -> list[PollSample]:
+    samples = [
+        PollSample(
+            candidate=market.question,
+            support=prior(market),
+            sample_size=1_000,
+            pollster_quality=0.55,
+            age_days=21,
+            source="market_consensus",
+        )
+    ]
+    for item in evidence:
+        if item.relevance < 0.55:
+            continue
+        support_shift = 0.08 * item.strength * (1 - item.ambiguity)
+        samples.append(
+            PollSample(
+                candidate=market.question,
+                support=clamp(prior(market) + support_shift),
+                sample_size=800,
+                pollster_quality=source_quality(item.source_type),
+                age_days=7 + 45 * (1 - item.novelty),
+                source=item.source_type,
+            )
+        )
+    return samples
+
+
+def weighted_polling_average(samples: list[PollSample]) -> tuple[float, float]:
+    weighted_sum = 0.0
+    total_weight = 0.0
+    for sample in samples:
+        recency = math.exp(-sample.age_days / 45)
+        size_weight = math.sqrt(sample.sample_size / 1_000)
+        weight = sample.pollster_quality * recency * size_weight
+        weighted_sum += sample.support * weight
+        total_weight += weight
+    if total_weight == 0:
+        return 0.5, 0.0
+    return clamp(weighted_sum / total_weight), total_weight
+
+
+def candidate_field_score(market: Market, evidence: list[EvidenceObservation]) -> float:
+    score = 0.50
+    text = f"{market.question} {market.description or ''}".lower()
+    if "nomination" in text or "primary" in text:
+        score -= 0.04
+    for item in evidence:
+        score += 0.12 * item.strength * item.relevance * source_quality(item.source_type)
+    return clamp(score)
+
+
+def source_quality(source_type: str) -> float:
+    normalized = source_type.lower()
+    if normalized in {"official", "pollster", "fec", "market_rule"}:
+        return 0.80
+    if normalized in {"major_news", "news"}:
+        return 0.68
+    if normalized in {"social", "unknown"}:
+        return 0.45
+    return 0.55
+
+
+def derive_sports_ratings(
+    market: Market,
+    evidence: list[EvidenceObservation],
+) -> list[SportsRatingSample]:
+    target = implied_rating_from_probability(prior(market))
+    for item in evidence:
+        target += 0.12 * item.strength * item.relevance * source_quality(item.source_type)
+    target = clamp(target, 0.05, 0.95)
+    field = [target]
+    remaining_strength = max(0.05, 1 - target)
+    for index in range(15):
+        decay = math.exp(-index / 5)
+        field.append(clamp((remaining_strength / 15) * (0.55 + decay), 0.01, 0.40))
+    return [
+        SportsRatingSample(team=market.question, rating=rating, source="market_implied_field")
+        for rating in field
+    ]
+
+
+def implied_rating_from_probability(probability: float) -> float:
+    return clamp(probability, 0.01, 0.95)
+
+
+def injury_uncertainty(evidence: list[EvidenceObservation]) -> float:
+    base = 0.45
+    for item in evidence:
+        if "injury" in item.claim.lower() or "injured" in item.claim.lower():
+            base += 0.20 * item.relevance
+    return clamp(base)
+
+
+def simulate_outright_probability(
+    target_rating: float,
+    field_ratings: list[float],
+    path_clarity: float,
+    simulations: int = 4_000,
+) -> float:
+    rng = random.Random(11)
+    wins = 0
+    noise_scale = 0.18 + 0.22 * (1 - path_clarity)
+    for _ in range(simulations):
+        sampled = [
+            max(0.001, rating * math.exp(rng.gauss(0, noise_scale)))
+            for rating in field_ratings
+        ]
+        total = sum(sampled)
+        draw = rng.random() * total
+        cumulative = 0.0
+        winner = 0
+        for index, value in enumerate(sampled):
+            cumulative += value
+            if cumulative >= draw:
+                winner = index
+                break
+        if winner == 0:
+            wins += 1
+    return wins / simulations
 
 
 def build_logic_consistency_model(market: Market) -> ModelDiagnostics:
