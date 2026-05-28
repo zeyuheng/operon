@@ -83,6 +83,13 @@ class ResearchPlannerService:
 
 def infer_entity(text: str, model_type: str) -> str | None:
     clean = re.sub(r"\s+", " ", text)
+    if model_type == "election_polling":
+        nomination_match = re.search(
+            r"Will ([A-Z][A-Za-z]+(?: [A-Z][A-Za-z]+){0,3}) win",
+            clean,
+        )
+        if nomination_match:
+            return nomination_match.group(1).strip()
     if model_type == "product_release":
         for entity in ["OpenAI", "Apple", "Rockstar", "Take-Two", "Tesla", "Google", "Microsoft"]:
             if entity.lower() in clean.lower():

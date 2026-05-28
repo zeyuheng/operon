@@ -16,7 +16,15 @@ from app.core.specialized_models import (
     build_product_release_model,
     build_sports_outright_model,
 )
-from app.schemas.market import EventDraft, MarketCandidate
+from app.schemas.evidence import EvidenceObservation
+from app.schemas.market import (
+    DataSourceStatus,
+    EventDraft,
+    FinancialBarrierDiagnostics,
+    MarketCandidate,
+    ModelDiagnostics,
+    ModelInput,
+)
 from app.services.crypto_price_service import CryptoPriceService
 from app.services.evidence_collector import EvidenceCollector
 from app.services.evidence_extractor import EvidenceExtractor
@@ -226,6 +234,26 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
     if consensus_guardrail.model_review_required:
         evidence_items.append(f"Consensus guardrail warning: {consensus_guardrail.warning}")
 
+    active_diagnostics = (
+        product_release
+        or macro_policy
+        or election_polling
+        or sports_outright
+        or logic_consistency
+        or general_event
+    )
+    data_sources = build_data_sources(
+        candidate=candidate,
+        observations=observations,
+        financial_barrier=financial_barrier,
+        diagnostics=active_diagnostics,
+    )
+    model_inputs = build_model_inputs(
+        candidate=candidate,
+        financial_barrier=financial_barrier,
+        diagnostics=active_diagnostics,
+    )
+
     event = EventDraft(
         id=str(uuid4()),
         market=candidate.market,
@@ -234,6 +262,8 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
         operon_probability=operon_probability,
         evidence_items=evidence_items,
         probability_timeline=timeline,
+        data_sources=data_sources,
+        model_inputs=model_inputs,
         risk_flags=candidate.risk_flags,
         research_plan=research_plan,
         consensus_guardrail=consensus_guardrail,
@@ -251,7 +281,14 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
 
 
 def get_event(event_id: str) -> EventDraft | None:
-    return EVENT_STORE.get(event_id)
+    event = EVENT_STORE.get(event_id)
+    if event is None:
+        return None
+    if not event.data_sources or not event.model_inputs:
+        event = hydrate_event_provenance(event)
+        EVENT_STORE[event.id] = event
+        save_events()
+    return event
 
 
 async def run_financial_barrier_model(candidate: MarketCandidate):
@@ -305,3 +342,380 @@ def append_model_result(
             },
         ]
     )
+
+
+def hydrate_event_provenance(event: EventDraft) -> EventDraft:
+    candidate = MarketCandidate(
+        market=event.market,
+        operon_score=0.5,
+        reason="backfilled from persisted event",
+        model_type=event.model_type,
+        category_guess=event.model_type,
+        selected_reason="Backfilled provenance for an event created before source tracking.",
+        resolution_score=0.5,
+        evidence_score=0.5,
+        liquidity_score=(
+            event.consensus_guardrail.liquidity_weight
+            if event.consensus_guardrail
+            else 0.5
+        ),
+    )
+    diagnostics = (
+        event.product_release
+        or event.macro_policy
+        or event.election_polling
+        or event.sports_outright
+        or event.logic_consistency
+        or event.general_event
+    )
+    return event.model_copy(
+        update={
+            "data_sources": build_data_sources(
+                candidate=candidate,
+                observations=[],
+                financial_barrier=event.financial_barrier,
+                diagnostics=diagnostics,
+            ),
+            "model_inputs": build_model_inputs(
+                candidate=candidate,
+                financial_barrier=event.financial_barrier,
+                diagnostics=diagnostics,
+            ),
+        }
+    )
+
+
+def build_data_sources(
+    candidate: MarketCandidate,
+    observations: list[EvidenceObservation],
+    financial_barrier: FinancialBarrierDiagnostics | None,
+    diagnostics: ModelDiagnostics | None,
+) -> list[DataSourceStatus]:
+    sources = [
+        DataSourceStatus(
+            name="Polymarket market price",
+            status="connected",
+            source_type="market_api",
+            used_for=["market_prior", "consensus_guardrail", "scout_score"],
+            variables=["market_probability", "liquidity", "volume"],
+            freshness="live at scout run",
+            reliability=candidate.liquidity_score,
+            note=(
+                "This is the anchor for every model unless external evidence is "
+                "strong enough to move it."
+            ),
+        ),
+        DataSourceStatus(
+            name="Polymarket market rules",
+            status="connected" if candidate.market.description else "partial",
+            source_type="market_metadata",
+            used_for=["resolution_rules", "risk_flags", "research_plan"],
+            variables=["description", "end_date", "resolution_clarity"],
+            freshness="live at scout run",
+            reliability=candidate.resolution_score,
+            note="Used to understand payoff mechanics, deadlines, and edge cases.",
+        ),
+    ]
+    if any(item.source_type == "source_failed" for item in observations):
+        sources.append(
+            DataSourceStatus(
+                name="Web search evidence",
+                status="failed",
+                source_type="web_search",
+                used_for=["evidence_collection"],
+                variables=["news_snippets", "source_discovery"],
+                reliability=0.2,
+                note=(
+                    "Search provider returned a bot challenge, so the page is not "
+                    "treated as evidence."
+                ),
+            )
+        )
+    elif any(item.source_type == "web_search" for item in observations):
+        sources.append(
+            DataSourceStatus(
+                name="Web search evidence",
+                status="connected",
+                source_type="web_search",
+                used_for=["evidence_collection"],
+                variables=["news_snippets", "source_discovery"],
+                reliability=0.55,
+                note=(
+                    "Search snippets are parsed into weak evidence until "
+                    "higher-quality APIs are connected."
+                ),
+            )
+        )
+
+    if candidate.model_type == "financial_barrier":
+        connected = financial_barrier is not None and "CoinGecko" in financial_barrier.data_source
+        sources.append(
+            DataSourceStatus(
+                name="CoinGecko price history",
+                status="connected" if connected else "fallback",
+                source_type="price_api",
+                used_for=["spot_price", "historical_volatility", "monte_carlo_paths"],
+                variables=["spot_price", "daily_prices", "annualized_volatility"],
+                freshness="live at model run" if connected else None,
+                reliability=0.85 if connected else 0.35,
+                note=(
+                    financial_barrier.data_source
+                    if financial_barrier
+                    else "Barrier parser did not run."
+                ),
+            )
+        )
+    elif candidate.model_type == "product_release":
+        official_count = sum(1 for item in observations if item.source_type == "official")
+        sources.append(
+            DataSourceStatus(
+                name="Official product sources",
+                status="connected" if official_count else "partial",
+                source_type="official_web",
+                used_for=["official_signal_strength", "structured_evidence_weight"],
+                variables=["official_announcement", "docs_or_product_availability"],
+                reliability=0.8 if official_count else 0.45,
+                note=(
+                    f"{official_count} official observations extracted."
+                    if official_count
+                    else (
+                        "Only planned/static official sources are configured; "
+                        "live extraction may fail by site."
+                    )
+                ),
+            )
+        )
+    elif candidate.model_type == "macro_policy":
+        sources.append(
+            DataSourceStatus(
+                name="FRED public CSV",
+                status="connected"
+                if diagnostics and "fallback" not in " ".join(diagnostics.notes).lower()
+                else "fallback",
+                source_type="macro_api",
+                used_for=["macro_indicators", "z_scores", "policy_reaction"],
+                variables=[
+                    "cpi_yoy",
+                    "unemployment_rate",
+                    "fed_funds_rate",
+                    "2y_yield",
+                    "10y_yield",
+                ],
+                freshness="latest FRED observations",
+                reliability=0.85,
+                note=(
+                    "CPI, unemployment, Fed funds, and Treasury yields are pulled "
+                    "from FRED public CSV."
+                ),
+            )
+        )
+    elif candidate.model_type == "election_polling":
+        sources.extend(
+            [
+                DataSourceStatus(
+                    name="Pollster database",
+                    status="planned",
+                    source_type="polling_api",
+                    used_for=["weighted_polling_average", "pollster_quality", "recency_weight"],
+                    variables=["poll_support", "sample_size", "pollster_quality", "field_date"],
+                    reliability=0.0,
+                    note=(
+                        "Not connected yet. Current polling average falls back to "
+                        "Polymarket consensus."
+                    ),
+                ),
+                DataSourceStatus(
+                    name="Fundraising and endorsements",
+                    status="planned",
+                    source_type="election_data",
+                    used_for=["candidate_field_strength"],
+                    variables=["fundraising", "endorsements", "candidate_entry_exit"],
+                    reliability=0.0,
+                    note="Not connected yet. Candidate-field adjustment is conservative.",
+                ),
+                DataSourceStatus(
+                    name="Delegate simulation",
+                    status="planned",
+                    source_type="simulation_data",
+                    used_for=["nomination_path"],
+                    variables=["primary_calendar", "delegate_rules", "early_state_momentum"],
+                    reliability=0.0,
+                    note="Not connected yet. Nomination path risk is represented as uncertainty.",
+                ),
+            ]
+        )
+    elif candidate.model_type == "sports_outright":
+        sources.extend(
+            [
+                DataSourceStatus(
+                    name="Team Elo / power rating feed",
+                    status="planned",
+                    source_type="sports_rating_api",
+                    used_for=["team_strength_proxy", "field_ratings"],
+                    variables=["elo", "net_rating", "strength_of_schedule"],
+                    reliability=0.0,
+                    note="Not connected yet. Team strength currently uses market-implied proxy.",
+                ),
+                DataSourceStatus(
+                    name="Injury feed",
+                    status="planned",
+                    source_type="sports_injury_api",
+                    used_for=["injury_depth_uncertainty"],
+                    variables=["player_status", "minutes_value", "return_timeline"],
+                    reliability=0.0,
+                    note="Not connected yet. Injury risk remains a broad uncertainty adjustment.",
+                ),
+                DataSourceStatus(
+                    name="Bookmaker odds consensus",
+                    status="planned",
+                    source_type="odds_api",
+                    used_for=["bookmaker_implied_power", "market_gap"],
+                    variables=["title_odds", "series_odds", "implied_probability"],
+                    reliability=0.0,
+                    note="Not connected yet. Polymarket is the only market-pricing input.",
+                ),
+            ]
+        )
+    elif candidate.model_type == "logic_consistency":
+        sources.append(
+            DataSourceStatus(
+                name="Related Polymarket graph",
+                status="planned",
+                source_type="market_graph",
+                used_for=["monotonicity", "mutual_exclusivity", "frechet_bounds"],
+                variables=["related_markets", "thresholds", "deadlines"],
+                reliability=0.0,
+                note="Not connected yet. Single-market logic checks remain a shell.",
+            )
+        )
+    return sources
+
+
+def build_model_inputs(
+    candidate: MarketCandidate,
+    financial_barrier: FinancialBarrierDiagnostics | None,
+    diagnostics: ModelDiagnostics | None,
+) -> list[ModelInput]:
+    inputs = [
+        ModelInput(
+            name="market_probability",
+            value=(
+                candidate.market.market_probability
+                if candidate.market.market_probability is not None
+                else 0.5
+            ),
+            source="Polymarket market price",
+            status="connected",
+            role="prior",
+            note="The base probability before model-specific updates.",
+        ),
+        ModelInput(
+            name="liquidity_score",
+            value=candidate.liquidity_score,
+            source="Polymarket market metadata",
+            status="connected",
+            role="confidence_weight",
+            note="Controls how much respect the consensus guardrail gives the market.",
+        ),
+    ]
+    if financial_barrier:
+        inputs.extend(
+            [
+                ModelInput(
+                    name="spot_price",
+                    value=financial_barrier.spot_price,
+                    source=financial_barrier.data_source,
+                    status=(
+                        "connected"
+                        if "CoinGecko" in financial_barrier.data_source
+                        else "fallback"
+                    ),
+                    role="simulation_start",
+                    note="Starting value for simulated asset paths.",
+                ),
+                ModelInput(
+                    name="annualized_volatility",
+                    value=financial_barrier.annualized_volatility,
+                    source=financial_barrier.data_source,
+                    status=(
+                        "connected"
+                        if "CoinGecko" in financial_barrier.data_source
+                        else "fallback"
+                    ),
+                    role="simulation_noise",
+                    note="Estimated from recent daily price history.",
+                ),
+                ModelInput(
+                    name="payoff_rule",
+                    value=financial_barrier.rule_type,
+                    source="Polymarket market rules",
+                    status="connected",
+                    role="payoff_adapter",
+                    note=financial_barrier.valuation_formula,
+                ),
+            ]
+        )
+    if diagnostics:
+        for name, value in diagnostics.state_scores.items():
+            inputs.append(
+                ModelInput(
+                    name=name,
+                    value=value,
+                    source=input_source_for(candidate.model_type, name),
+                    status=input_status_for(candidate.model_type, name),
+                    role=input_role_for(name),
+                    note=input_note_for(candidate.model_type, name),
+                )
+            )
+    return inputs
+
+
+def input_source_for(model_type: str, name: str) -> str:
+    if name == "market_consensus" or name == "market_expectation":
+        return "Polymarket market price"
+    if model_type == "macro_policy":
+        return "FRED public CSV"
+    if model_type == "product_release":
+        return "Official/product web sources and market text"
+    if model_type == "election_polling":
+        return "Polymarket proxy until pollster database is connected"
+    if model_type == "sports_outright":
+        return "Polymarket proxy until sports data feeds are connected"
+    if model_type == "logic_consistency":
+        return "Planned related-market graph"
+    return "Market text and generic evidence"
+
+
+def input_status_for(model_type: str, name: str) -> str:
+    if name in {"market_consensus", "market_expectation"}:
+        return "connected"
+    if model_type in {"election_polling", "sports_outright"}:
+        return "proxy"
+    if model_type == "logic_consistency":
+        return "planned"
+    return "connected"
+
+
+def input_role_for(name: str) -> str:
+    if "confidence" in name or "quality" in name or "clarity" in name:
+        return "confidence"
+    if "risk" in name or "uncertainty" in name or "variance" in name:
+        return "uncertainty"
+    if "probability" in name or "average" in name or "consensus" in name:
+        return "probability_update"
+    return "state_variable"
+
+
+def input_note_for(model_type: str, name: str) -> str:
+    if model_type == "election_polling" and name in {
+        "weighted_polling_average",
+        "pollster_quality",
+        "recency_weight",
+    }:
+        return "Proxy value: no real poll feed is connected yet."
+    if model_type == "sports_outright" and name in {
+        "team_strength_proxy",
+        "monte_carlo_title_probability",
+    }:
+        return "Proxy value: no team Elo, injury, or odds consensus feed is connected yet."
+    return "Used directly by the model's probability update or confidence band."

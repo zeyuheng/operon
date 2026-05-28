@@ -214,6 +214,101 @@ input {
   color: var(--warn);
 }
 
+.source-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 14px;
+}
+
+.source-card {
+  background: #f8faf7;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.source-card p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 8px 0 0;
+}
+
+.source-head {
+  align-items: start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.source-meta {
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.source-status {
+  border-radius: 999px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+  padding: 4px 8px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.source-status.connected {
+  background: #dbece4;
+  color: #17614c;
+}
+
+.source-status.proxy {
+  background: #eceddf;
+  color: #646327;
+}
+
+.source-status.planned {
+  background: #e6eaf0;
+  color: #3e536e;
+}
+
+.source-status.failed {
+  background: #f6dfdc;
+  color: #8f302a;
+}
+
+.input-table {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.input-row {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 170px 80px 140px 1fr auto;
+  min-height: 54px;
+  padding: 10px;
+}
+
+.input-row span:first-child {
+  font-weight: 700;
+}
+
+.input-row em,
+.input-row small {
+  color: var(--muted);
+  font-style: normal;
+}
+
 .dashboard {
   display: grid;
   gap: 18px;
@@ -370,6 +465,41 @@ input {
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 13px;
   margin-top: 12px;
+}
+
+.viz-inputs {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 12px;
+}
+
+.viz-input {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  min-height: 118px;
+  padding: 10px;
+}
+
+.viz-input strong {
+  font-size: 13px;
+}
+
+.viz-input em {
+  color: var(--accent-strong);
+  font-size: 18px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.viz-input p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  margin: 0;
 }
 
 .viz-flow {
@@ -605,7 +735,14 @@ input {
   .viz-state-map,
   .viz-brief,
   .viz-bridge,
+  .viz-inputs,
+  .source-grid,
   .viz-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .input-row {
+    align-items: start;
     grid-template-columns: 1fr;
   }
 

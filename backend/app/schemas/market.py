@@ -76,6 +76,26 @@ class ConsensusGuardrail(BaseModel):
     divergence_risk: float = Field(ge=0, le=1)
 
 
+class DataSourceStatus(BaseModel):
+    name: str
+    status: str
+    source_type: str
+    used_for: list[str] = Field(default_factory=list)
+    variables: list[str] = Field(default_factory=list)
+    freshness: str | None = None
+    reliability: float = Field(default=0.5, ge=0, le=1)
+    note: str
+
+
+class ModelInput(BaseModel):
+    name: str
+    value: float | str
+    source: str
+    status: str
+    role: str
+    note: str
+
+
 class EventDraft(BaseModel):
     id: str
     market: Market
@@ -84,6 +104,8 @@ class EventDraft(BaseModel):
     operon_probability: float = Field(ge=0, le=1)
     evidence_items: list[str] = Field(default_factory=list)
     probability_timeline: list[dict[str, float | str]] = Field(default_factory=list)
+    data_sources: list[DataSourceStatus] = Field(default_factory=list)
+    model_inputs: list[ModelInput] = Field(default_factory=list)
     risk_flags: list[str] = Field(default_factory=list)
     research_plan: ResearchPlan | None = None
     consensus_guardrail: ConsensusGuardrail | None = None

@@ -13,6 +13,7 @@ from app.schemas.evidence import EvidenceDirection, EvidenceObservation, PollSam
 from app.schemas.market import Market
 from app.services.evidence_collector import is_blocked_search_text
 from app.services.macro_data_service import MacroSnapshot
+from app.services.research_planner_service import infer_entity
 
 
 def assert_diagnostics_are_bounded(posterior: float, interval: list[float]) -> None:
@@ -131,3 +132,12 @@ def test_search_challenge_text_is_not_treated_as_evidence() -> None:
         "DuckDuckGo Unfortunately, bots use DuckDuckGo too. "
         "Please complete the following challenge to confirm this search was made by a human."
     )
+
+
+def test_election_entity_extraction_keeps_full_name() -> None:
+    entity = infer_entity(
+        "Will Gavin Newsom win the 2028 Democratic presidential nomination?",
+        "election_polling",
+    )
+
+    assert entity == "Gavin Newsom"

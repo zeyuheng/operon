@@ -38,6 +38,8 @@ export type EventDraft = {
   operon_probability: number;
   evidence_items: string[];
   probability_timeline: Array<{ label: string; probability: number }>;
+  data_sources: DataSourceStatus[];
+  model_inputs: ModelInput[];
   risk_flags: string[];
   research_plan?: ResearchPlan | null;
   consensus_guardrail?: ConsensusGuardrail | null;
@@ -48,6 +50,26 @@ export type EventDraft = {
   sports_outright?: ModelDiagnostics | null;
   logic_consistency?: ModelDiagnostics | null;
   general_event?: ModelDiagnostics | null;
+};
+
+export type DataSourceStatus = {
+  name: string;
+  status: string;
+  source_type: string;
+  used_for: string[];
+  variables: string[];
+  freshness?: string | null;
+  reliability: number;
+  note: string;
+};
+
+export type ModelInput = {
+  name: string;
+  value: number | string;
+  source: string;
+  status: string;
+  role: string;
+  note: string;
 };
 
 export type ResearchPlan = {

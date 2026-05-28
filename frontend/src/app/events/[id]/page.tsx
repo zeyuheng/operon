@@ -35,6 +35,16 @@ function labelize(value: string) {
   return value.replace(/_/g, " ");
 }
 
+function displayValue(value: number | string) {
+  if (typeof value === "number") {
+    if (value >= 0 && value <= 1) {
+      return percent(value);
+    }
+    return number(value);
+  }
+  return labelize(value);
+}
+
 function signedPercent(value?: number | null) {
   if (value === null || value === undefined) {
     return "n/a";
@@ -77,6 +87,19 @@ function probabilityDelta(event: EventDraft, diagnostics: ModelDiagnostics | nul
     return null;
   }
   return model - event.market_probability;
+}
+
+function statusClass(status: string) {
+  if (status === "connected") {
+    return "source-status connected";
+  }
+  if (status === "proxy" || status === "partial") {
+    return "source-status proxy";
+  }
+  if (status === "failed" || status === "fallback") {
+    return "source-status failed";
+  }
+  return "source-status planned";
 }
 
 function ModelRunVisualization({
@@ -290,6 +313,17 @@ function GenericModelViz({
       </div>
 
       <div className="viz-formula">{formula}</div>
+
+      <div className="viz-inputs">
+        {event.model_inputs.slice(0, 8).map((input) => (
+          <div className="viz-input" key={`${input.name}-${input.source}`}>
+            <span className={statusClass(input.status)}>{input.status}</span>
+            <strong>{labelize(input.name)}</strong>
+            <em>{displayValue(input.value)}</em>
+            <p>{input.source}</p>
+          </div>
+        ))}
+      </div>
 
       <div className="viz-flow explain-flow">
         {stages.map((stage) => (
@@ -534,6 +568,50 @@ export default function EventPage() {
             ) : null}
           </div>
         ) : null}
+
+        <div className="panel wide">
+          <h2>Data Provenance</h2>
+          <p className="reason">
+            This section is the anti-black-box layer: every probability below should trace back to
+            either a connected source, a proxy, a planned feed, or a failed fetch.
+          </p>
+          <div className="source-grid">
+            {event.data_sources.map((source) => (
+              <div className="source-card" key={`${source.name}-${source.status}`}>
+                <div className="source-head">
+                  <strong>{source.name}</strong>
+                  <span className={statusClass(source.status)}>{source.status}</span>
+                </div>
+                <p>{source.note}</p>
+                <div className="source-meta">
+                  <span>{source.source_type}</span>
+                  <span>reliability {percent(source.reliability)}</span>
+                  {source.freshness ? <span>{source.freshness}</span> : null}
+                </div>
+                <div className="badge-row">
+                  {source.variables.map((variable) => (
+                    <span className="badge" key={variable}>
+                      {labelize(variable)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="input-table">
+            {event.model_inputs.map((input) => (
+              <div className="input-row" key={`${input.name}-${input.role}-${input.source}`}>
+                <span>{labelize(input.name)}</span>
+                <strong>{displayValue(input.value)}</strong>
+                <em>{labelize(input.role)}</em>
+                <small>
+                  {input.source} - {input.note}
+                </small>
+                <span className={statusClass(input.status)}>{input.status}</span>
+              </div>
+            ))}
+          </div>
+        </div>
 
         <div className="panel">
           <h2>Evidence Ledger</h2>
