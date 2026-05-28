@@ -25,6 +25,9 @@ export type MarketCandidate = {
   resolution_score: number;
   evidence_score: number;
   liquidity_score: number;
+  market_structure_type: string;
+  primary_edge_source: string;
+  scout_penalty: number;
 };
 
 export type EventDraft = {

@@ -103,7 +103,8 @@ export default function ScoutPage() {
                 <div>
                   <h2 className="question">{candidate.market.question}</h2>
                   <div className="meta">
-                    {candidate.category_guess} / {candidate.model_type}
+                    {candidate.category_guess} / {candidate.model_type} /{" "}
+                    {candidate.market_structure_type}
                     {candidate.market.end_date ? ` / closes ${candidate.market.end_date}` : ""}
                   </div>
                   <p className="reason">{candidate.selected_reason}</p>
@@ -152,6 +153,14 @@ export default function ScoutPage() {
                 <div className="metric">
                   <span className="metric-label">Resolution</span>
                   <span className="metric-value">{percent(candidate.resolution_score)}</span>
+                </div>
+                <div className="metric">
+                  <span className="metric-label">Edge Source</span>
+                  <span className="metric-value">{candidate.primary_edge_source}</span>
+                </div>
+                <div className="metric">
+                  <span className="metric-label">Scout Penalty</span>
+                  <span className="metric-value">{percent(candidate.scout_penalty)}</span>
                 </div>
               </div>
             </article>

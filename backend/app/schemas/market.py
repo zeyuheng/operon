@@ -26,6 +26,9 @@ class MarketCandidate(BaseModel):
     resolution_score: float = Field(ge=0, le=1)
     evidence_score: float = Field(ge=0, le=1)
     liquidity_score: float = Field(ge=0, le=1)
+    market_structure_type: str = "forecasting_market"
+    primary_edge_source: str = "event_forecast"
+    scout_penalty: float = Field(default=0.0, ge=0, le=1)
 
 
 class FinancialBarrierDiagnostics(BaseModel):
