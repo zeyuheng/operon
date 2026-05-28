@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 
-import { EventDraft, getEvent } from "@/lib/api";
+import { EventDraft, ModelDiagnostics, getEvent } from "@/lib/api";
 
 function percent(value?: number | null) {
   if (value === null || value === undefined) {
@@ -29,6 +29,17 @@ function number(value?: number | null) {
     return "n/a";
   }
   return new Intl.NumberFormat("en", { maximumFractionDigits: 1 }).format(value);
+}
+
+function activeDiagnostics(event: EventDraft): ModelDiagnostics | null {
+  return (
+    event.product_release ??
+    event.macro_policy ??
+    event.election_polling ??
+    event.logic_consistency ??
+    event.general_event ??
+    null
+  );
 }
 
 export default function EventPage() {
@@ -60,6 +71,7 @@ export default function EventPage() {
   if (!event) {
     return <div className="empty">Loading event dashboard...</div>;
   }
+  const diagnostics = activeDiagnostics(event);
 
   return (
     <>
@@ -200,6 +212,63 @@ export default function EventPage() {
               {event.financial_barrier.notes.map((note) => (
                 <p key={note}>{note}</p>
               ))}
+            </div>
+          </div>
+        ) : null}
+
+        {diagnostics ? (
+          <div className="panel wide">
+            <h2>{diagnostics.model_name}</h2>
+            <div className="metrics">
+              <div className="metric">
+                <span className="metric-label">Posterior</span>
+                <span className="metric-value">
+                  {percent(diagnostics.posterior_probability)}
+                </span>
+              </div>
+              <div className="metric">
+                <span className="metric-label">Confidence</span>
+                <span className="metric-value">{percent(diagnostics.confidence)}</span>
+              </div>
+              <div className="metric">
+                <span className="metric-label">Lower</span>
+                <span className="metric-value">
+                  {percent(diagnostics.uncertainty_interval[0])}
+                </span>
+              </div>
+              <div className="metric">
+                <span className="metric-label">Upper</span>
+                <span className="metric-value">
+                  {percent(diagnostics.uncertainty_interval[1])}
+                </span>
+              </div>
+            </div>
+
+            <div className="state-grid">
+              {Object.entries(diagnostics.state_scores).map(([name, value]) => (
+                <div className="state-row" key={name}>
+                  <span>{name}</span>
+                  <div className="bar">
+                    <div className="bar-fill" style={{ width: `${Math.round(value * 100)}%` }} />
+                  </div>
+                  <strong>{percent(value)}</strong>
+                </div>
+              ))}
+            </div>
+
+            <div className="split-list">
+              <div>
+                <strong>Key Drivers</strong>
+                {diagnostics.key_drivers.map((driver) => (
+                  <p key={driver}>{driver}</p>
+                ))}
+              </div>
+              <div>
+                <strong>Notes</strong>
+                {diagnostics.notes.map((note) => (
+                  <p key={note}>{note}</p>
+                ))}
+              </div>
             </div>
           </div>
         ) : null}

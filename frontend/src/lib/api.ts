@@ -40,6 +40,11 @@ export type EventDraft = {
   probability_timeline: Array<{ label: string; probability: number }>;
   risk_flags: string[];
   financial_barrier?: FinancialBarrierDiagnostics | null;
+  product_release?: ModelDiagnostics | null;
+  macro_policy?: ModelDiagnostics | null;
+  election_polling?: ModelDiagnostics | null;
+  logic_consistency?: ModelDiagnostics | null;
+  general_event?: ModelDiagnostics | null;
 };
 
 export type FinancialBarrierDiagnostics = {
@@ -59,6 +64,16 @@ export type FinancialBarrierDiagnostics = {
   valuation_formula: string;
   drift: number;
   data_source: string;
+  notes: string[];
+};
+
+export type ModelDiagnostics = {
+  model_name: string;
+  posterior_probability: number;
+  confidence: number;
+  uncertainty_interval: [number, number];
+  state_scores: Record<string, number>;
+  key_drivers: string[];
   notes: string[];
 };
 

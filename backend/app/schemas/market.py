@@ -51,6 +51,16 @@ class FinancialBarrierDiagnostics(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
+class ModelDiagnostics(BaseModel):
+    model_name: str
+    posterior_probability: float = Field(ge=0, le=1)
+    confidence: float = Field(ge=0, le=1)
+    uncertainty_interval: list[float] = Field(min_length=2, max_length=2)
+    state_scores: dict[str, float] = Field(default_factory=dict)
+    key_drivers: list[str] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+
+
 class EventDraft(BaseModel):
     id: str
     market: Market
@@ -61,3 +71,8 @@ class EventDraft(BaseModel):
     probability_timeline: list[dict[str, float | str]] = Field(default_factory=list)
     risk_flags: list[str] = Field(default_factory=list)
     financial_barrier: FinancialBarrierDiagnostics | None = None
+    product_release: ModelDiagnostics | None = None
+    macro_policy: ModelDiagnostics | None = None
+    election_polling: ModelDiagnostics | None = None
+    logic_consistency: ModelDiagnostics | None = None
+    general_event: ModelDiagnostics | None = None

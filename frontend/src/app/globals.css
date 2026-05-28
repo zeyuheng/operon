@@ -254,6 +254,33 @@ input {
   grid-template-columns: 130px 1fr 58px;
 }
 
+.state-grid {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.state-row {
+  align-items: center;
+  color: var(--muted);
+  display: grid;
+  font-size: 14px;
+  gap: 12px;
+  grid-template-columns: 190px 1fr 58px;
+}
+
+.split-list {
+  color: var(--muted);
+  display: grid;
+  gap: 18px;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 16px;
+}
+
+.split-list strong {
+  color: var(--foreground);
+}
+
 .bar {
   background: #dde4df;
   border-radius: 999px;
