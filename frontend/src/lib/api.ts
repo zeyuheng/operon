@@ -39,6 +39,7 @@ export type EventDraft = {
   evidence_items: string[];
   probability_timeline: Array<{ label: string; probability: number }>;
   risk_flags: string[];
+  consensus_guardrail?: ConsensusGuardrail | null;
   financial_barrier?: FinancialBarrierDiagnostics | null;
   product_release?: ModelDiagnostics | null;
   macro_policy?: ModelDiagnostics | null;
@@ -46,6 +47,19 @@ export type EventDraft = {
   sports_outright?: ModelDiagnostics | null;
   logic_consistency?: ModelDiagnostics | null;
   general_event?: ModelDiagnostics | null;
+};
+
+export type ConsensusGuardrail = {
+  market_probability?: number | null;
+  operon_probability: number;
+  gap: number;
+  absolute_gap: number;
+  status: string;
+  model_review_required: boolean;
+  warning: string;
+  confidence_used: number;
+  liquidity_weight: number;
+  divergence_risk: number;
 };
 
 export type FinancialBarrierDiagnostics = {

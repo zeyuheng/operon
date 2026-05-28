@@ -123,6 +123,63 @@ export default function EventPage() {
           </div>
         </div>
 
+        {event.consensus_guardrail ? (
+          <div className="panel wide">
+            <h2>Market Consensus Check</h2>
+            <div className="metrics">
+              <div className="metric">
+                <span className="metric-label">Status</span>
+                <span className="metric-value">{event.consensus_guardrail.status}</span>
+              </div>
+              <div className="metric">
+                <span className="metric-label">Gap</span>
+                <span className="metric-value">
+                  {event.consensus_guardrail.gap >= 0 ? "+" : ""}
+                  {percent(event.consensus_guardrail.gap)}
+                </span>
+              </div>
+              <div className="metric">
+                <span className="metric-label">Abs Gap</span>
+                <span className="metric-value">
+                  {percent(event.consensus_guardrail.absolute_gap)}
+                </span>
+              </div>
+              <div className="metric">
+                <span className="metric-label">Divergence Risk</span>
+                <span className="metric-value">
+                  {percent(event.consensus_guardrail.divergence_risk)}
+                </span>
+              </div>
+              <div className="metric">
+                <span className="metric-label">Model Confidence</span>
+                <span className="metric-value">
+                  {percent(event.consensus_guardrail.confidence_used)}
+                </span>
+              </div>
+              <div className="metric">
+                <span className="metric-label">Liquidity Weight</span>
+                <span className="metric-value">
+                  {percent(event.consensus_guardrail.liquidity_weight)}
+                </span>
+              </div>
+            </div>
+            <div
+              className={
+                event.consensus_guardrail.model_review_required
+                  ? "rule-box review"
+                  : "rule-box"
+              }
+            >
+              <strong>
+                {event.consensus_guardrail.model_review_required
+                  ? "Model review required"
+                  : "Consensus guardrail"}
+              </strong>
+              <p>{event.consensus_guardrail.warning}</p>
+            </div>
+          </div>
+        ) : null}
+
         <div className="panel">
           <h2>Evidence Ledger</h2>
           <div className="evidence-list">

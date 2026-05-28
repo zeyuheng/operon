@@ -242,6 +242,12 @@ input {
   margin: 8px 0 0;
 }
 
+.rule-box.review {
+  background: #fbe9e7;
+  border-color: #e0aaa4;
+  color: #762e29;
+}
+
 .timeline {
   display: grid;
   gap: 10px;

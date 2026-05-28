@@ -61,6 +61,19 @@ class ModelDiagnostics(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
+class ConsensusGuardrail(BaseModel):
+    market_probability: float | None = Field(default=None, ge=0, le=1)
+    operon_probability: float = Field(ge=0, le=1)
+    gap: float
+    absolute_gap: float = Field(ge=0, le=1)
+    status: str
+    model_review_required: bool = False
+    warning: str
+    confidence_used: float = Field(ge=0, le=1)
+    liquidity_weight: float = Field(ge=0, le=1)
+    divergence_risk: float = Field(ge=0, le=1)
+
+
 class EventDraft(BaseModel):
     id: str
     market: Market
@@ -70,6 +83,7 @@ class EventDraft(BaseModel):
     evidence_items: list[str] = Field(default_factory=list)
     probability_timeline: list[dict[str, float | str]] = Field(default_factory=list)
     risk_flags: list[str] = Field(default_factory=list)
+    consensus_guardrail: ConsensusGuardrail | None = None
     financial_barrier: FinancialBarrierDiagnostics | None = None
     product_release: ModelDiagnostics | None = None
     macro_policy: ModelDiagnostics | None = None

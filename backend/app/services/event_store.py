@@ -1,5 +1,6 @@
 from uuid import uuid4
 
+from app.core.consensus_guardrail import build_consensus_guardrail
 from app.core.financial_barrier_model import (
     build_financial_barrier_diagnostics,
     parse_financial_barrier,
@@ -53,9 +54,11 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
     sports_outright = None
     logic_consistency = None
     general_event = None
+    model_confidence = 0.35
     if candidate.model_type == "financial_barrier":
         financial_barrier = await run_financial_barrier_model(candidate)
         if financial_barrier is not None:
+            model_confidence = 0.62
             operon_probability = combine_probabilities(
                 scout_probability=operon_probability,
                 model_probability=financial_barrier.expected_contract_value,
@@ -83,6 +86,7 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
             )
     elif candidate.model_type == "product_release":
         product_release = build_product_release_model(candidate.market)
+        model_confidence = product_release.confidence
         operon_probability = combine_probabilities(
             scout_probability=operon_probability,
             model_probability=product_release.posterior_probability,
@@ -98,6 +102,7 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
         )
     elif candidate.model_type == "macro_policy":
         macro_policy = build_macro_policy_model(candidate.market)
+        model_confidence = macro_policy.confidence
         operon_probability = combine_probabilities(
             scout_probability=operon_probability,
             model_probability=macro_policy.posterior_probability,
@@ -109,6 +114,7 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
         )
     elif candidate.model_type == "election_polling":
         election_polling = build_election_polling_model(candidate.market, observations)
+        model_confidence = election_polling.confidence
         operon_probability = combine_probabilities(
             scout_probability=operon_probability,
             model_probability=election_polling.posterior_probability,
@@ -124,6 +130,7 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
         )
     elif candidate.model_type == "sports_outright":
         sports_outright = build_sports_outright_model(candidate.market, observations)
+        model_confidence = sports_outright.confidence
         operon_probability = combine_probabilities(
             scout_probability=operon_probability,
             model_probability=sports_outright.posterior_probability,
@@ -139,6 +146,7 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
         )
     elif candidate.model_type == "logic_consistency":
         logic_consistency = build_logic_consistency_model(candidate.market)
+        model_confidence = logic_consistency.confidence
         operon_probability = combine_probabilities(
             scout_probability=operon_probability,
             model_probability=logic_consistency.posterior_probability,
@@ -154,6 +162,7 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
         )
     else:
         general_event = build_general_event_model(candidate.market)
+        model_confidence = general_event.confidence
         operon_probability = combine_probabilities(
             scout_probability=operon_probability,
             model_probability=general_event.posterior_probability,
@@ -164,6 +173,14 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
         )
 
     evidence_items.append("No external text evidence ledger entries have been collected yet.")
+    consensus_guardrail = build_consensus_guardrail(
+        candidate=candidate,
+        operon_probability=operon_probability,
+        model_confidence=model_confidence,
+    )
+    if consensus_guardrail.model_review_required:
+        evidence_items.append(f"Consensus guardrail warning: {consensus_guardrail.warning}")
+
     event = EventDraft(
         id=str(uuid4()),
         market=candidate.market,
@@ -173,6 +190,7 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
         evidence_items=evidence_items,
         probability_timeline=timeline,
         risk_flags=candidate.risk_flags,
+        consensus_guardrail=consensus_guardrail,
         financial_barrier=financial_barrier,
         product_release=product_release,
         macro_policy=macro_policy,
