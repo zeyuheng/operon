@@ -180,6 +180,56 @@ export default function EventPage() {
           </div>
         ) : null}
 
+        {event.research_plan ? (
+          <div className="panel wide">
+            <h2>Research Plan</h2>
+            <div className="metrics">
+              <div className="metric">
+                <span className="metric-label">Planner</span>
+                <span className="metric-value">{event.research_plan.planner}</span>
+              </div>
+              <div className="metric">
+                <span className="metric-label">Event Type</span>
+                <span className="metric-value">
+                  {event.research_plan.understanding.event_type}
+                </span>
+              </div>
+              <div className="metric">
+                <span className="metric-label">Entity</span>
+                <span className="metric-value">
+                  {event.research_plan.understanding.target_entity ?? "n/a"}
+                </span>
+              </div>
+            </div>
+            <div className="split-list">
+              <div>
+                <strong>Required Variables</strong>
+                {event.research_plan.requirements.map((item) => (
+                  <p key={item.name}>
+                    {item.priority}: {item.name} — {item.reason}
+                  </p>
+                ))}
+              </div>
+              <div>
+                <strong>Source Plan</strong>
+                {event.research_plan.source_plan.map((item) => (
+                  <p key={`${item.source_type}-${item.variable}-${item.query}`}>
+                    {item.source_type}: {item.variable} — {item.query}
+                  </p>
+                ))}
+              </div>
+            </div>
+            {event.research_plan.missing_data.length ? (
+              <div className="rule-box">
+                <strong>Still Missing</strong>
+                {event.research_plan.missing_data.map((item) => (
+                  <p key={item}>{item}</p>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="panel">
           <h2>Evidence Ledger</h2>
           <div className="evidence-list">

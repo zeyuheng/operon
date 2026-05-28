@@ -16,9 +16,11 @@ from app.core.specialized_models import (
 )
 from app.schemas.market import EventDraft, MarketCandidate
 from app.services.crypto_price_service import CryptoPriceService
+from app.services.evidence_collector import EvidenceCollector
 from app.services.evidence_extractor import EvidenceExtractor
 from app.services.macro_data_service import MacroDataService, MacroSnapshot
 from app.services.product_evidence_service import ProductEvidenceService
+from app.services.research_planner_service import ResearchPlannerService
 
 EVENT_STORE: dict[str, EventDraft] = {}
 
@@ -43,7 +45,15 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
         candidate.selected_reason,
         f"Initial scout scores: {candidate.reason}",
     ]
+    research_plan = await ResearchPlannerService().build_plan(candidate)
     observations = await EvidenceExtractor().extract_from_market_text(candidate.market)
+    collected_observations = await EvidenceCollector().collect(research_plan)
+    observations.extend(collected_observations)
+    evidence_items.append(
+        "Research planner generated "
+        f"{len(research_plan.requirements)} requirements and "
+        f"{len(research_plan.source_plan)} source tasks."
+    )
     evidence_items.extend(
         f"Extracted evidence: {item.claim} "
         f"(direction={item.direction}, strength={item.strength:.2f}, source={item.source_type})"
@@ -200,6 +210,7 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
         evidence_items=evidence_items,
         probability_timeline=timeline,
         risk_flags=candidate.risk_flags,
+        research_plan=research_plan,
         consensus_guardrail=consensus_guardrail,
         financial_barrier=financial_barrier,
         product_release=product_release,

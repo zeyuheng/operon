@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field
 
+from app.schemas.research import ResearchPlan
+
 
 class Market(BaseModel):
     id: str
@@ -83,6 +85,7 @@ class EventDraft(BaseModel):
     evidence_items: list[str] = Field(default_factory=list)
     probability_timeline: list[dict[str, float | str]] = Field(default_factory=list)
     risk_flags: list[str] = Field(default_factory=list)
+    research_plan: ResearchPlan | None = None
     consensus_guardrail: ConsensusGuardrail | None = None
     financial_barrier: FinancialBarrierDiagnostics | None = None
     product_release: ModelDiagnostics | None = None

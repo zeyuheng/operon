@@ -39,6 +39,7 @@ export type EventDraft = {
   evidence_items: string[];
   probability_timeline: Array<{ label: string; probability: number }>;
   risk_flags: string[];
+  research_plan?: ResearchPlan | null;
   consensus_guardrail?: ConsensusGuardrail | null;
   financial_barrier?: FinancialBarrierDiagnostics | null;
   product_release?: ModelDiagnostics | null;
@@ -47,6 +48,28 @@ export type EventDraft = {
   sports_outright?: ModelDiagnostics | null;
   logic_consistency?: ModelDiagnostics | null;
   general_event?: ModelDiagnostics | null;
+};
+
+export type ResearchPlan = {
+  understanding: {
+    event_type: string;
+    target_entity?: string | null;
+    trigger_condition: string;
+    deadline?: string | null;
+    resolution_source: string[];
+    edge_cases: string[];
+    model_type: string;
+  };
+  requirements: Array<{ name: string; reason: string; priority: string }>;
+  source_plan: Array<{
+    source_type: string;
+    query: string;
+    target_url?: string | null;
+    variable: string;
+    reliability_prior: number;
+  }>;
+  missing_data: string[];
+  planner: string;
 };
 
 export type ConsensusGuardrail = {
