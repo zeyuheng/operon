@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+
 const modelCards = [
   ["Financial Barrier", "Price paths, volatility, payoff adapters"],
   ["Product Release", "Official signals, launch readiness, deadline pressure"],
@@ -38,7 +40,7 @@ export default function HomePage() {
             <Link className="button" href="/scout">
               Launch Scout
             </Link>
-            <a className="button secondary" href="http://127.0.0.1:8000/docs">
+            <a className="button secondary" href={`${apiBaseUrl}/docs`}>
               API Docs
             </a>
           </div>

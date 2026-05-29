@@ -11,4 +11,5 @@ dist/
 build/
 .next/
 coverage/
+*.log
 backend/data/events.json

@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 
 import "./globals.css";
 
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+
 export const metadata: Metadata = {
   title: "Operon",
   description: "Market-aware event intelligence for prediction markets.",
@@ -23,7 +25,7 @@ export default function RootLayout({
             </Link>
             <nav className="nav">
               <Link href="/scout">Scout</Link>
-              <a href="http://127.0.0.1:8000/docs">API Docs</a>
+              <a href={`${apiBaseUrl}/docs`}>API Docs</a>
             </nav>
           </header>
           <main className="main">{children}</main>
