@@ -1,5 +1,6 @@
 from enum import StrEnum
 
+from app.core.financial_barrier_model import parse_financial_barrier
 from app.schemas.market import Market
 
 
@@ -15,7 +16,20 @@ class EventModelType(StrEnum):
 
 def route_model(market: Market) -> EventModelType:
     text = f"{market.question} {market.category or ''}".lower()
-    if any(term in text for term in ["btc", "bitcoin", "eth", "ethereum", "$"]):
+    if any(
+        term in text
+        for term in [
+            "airdrop",
+            "mainnet",
+            "testnet",
+            "token generation",
+            "tge",
+            "claim",
+            "listing",
+        ]
+    ):
+        return EventModelType.PRODUCT_RELEASE
+    if parse_financial_barrier(market) is not None:
         return EventModelType.FINANCIAL_BARRIER
     if any(term in text for term in ["fed", "cpi", "rate", "inflation"]):
         return EventModelType.MACRO_POLICY

@@ -23,3 +23,13 @@ def test_routes_nomination_market_to_election() -> None:
 def test_routes_sports_outright_market() -> None:
     market = Market(id="4", question="Will the Knicks win the 2026 NBA Finals?")
     assert route_model(market) == EventModelType.SPORTS_OUTRIGHT
+
+
+def test_routes_airdrop_project_with_eth_name_away_from_financial_barrier() -> None:
+    market = Market(id="5", question="Will MegaETH perform an airdrop by June 30?")
+    assert route_model(market) == EventModelType.PRODUCT_RELEASE
+
+
+def test_routes_crypto_price_barrier_only_with_explicit_price_language() -> None:
+    market = Market(id="6", question="Will ETH hit $3,000 by June 30?")
+    assert route_model(market) == EventModelType.FINANCIAL_BARRIER

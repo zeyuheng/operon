@@ -7,6 +7,7 @@ from app.core.financial_barrier_model import (
     build_financial_barrier_diagnostics,
     parse_financial_barrier,
 )
+from app.core.model_router import EventModelType
 from app.core.probability_engine import update_log_odds
 from app.core.specialized_models import (
     build_election_polling_model,
@@ -132,6 +133,22 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
             evidence_items.append(
                 "Rule adapter applied: "
                 f"{financial_barrier.rule_type}. {financial_barrier.rule_summary}"
+            )
+        else:
+            general_event = build_general_event_model(candidate.market)
+            model_confidence = general_event.confidence
+            operon_probability = combine_probabilities(
+                scout_probability=operon_probability,
+                model_probability=general_event.posterior_probability,
+            )
+            append_model_result(
+                timeline,
+                "general_event_model",
+                general_event.posterior_probability,
+            )
+            evidence_items.append(
+                "Financial barrier parser rejected this market; Operon fell back to "
+                "the conservative general event model."
             )
     elif candidate.model_type == "product_release":
         product_observations = await ProductEvidenceService().fetch_evidence(candidate.market)
@@ -305,6 +322,7 @@ def get_event(event_id: str) -> EventDraft | None:
     event = EVENT_STORE.get(event_id)
     if event is None:
         return None
+    event = repair_invalid_financial_event(event)
     if not event.data_sources or not event.model_inputs:
         event = hydrate_event_provenance(event)
         EVENT_STORE[event.id] = event
@@ -427,6 +445,71 @@ def hydrate_event_provenance(event: EventDraft) -> EventDraft:
             ),
         }
     )
+
+
+def repair_invalid_financial_event(event: EventDraft) -> EventDraft:
+    if event.model_type != EventModelType.FINANCIAL_BARRIER.value:
+        return event
+    if parse_financial_barrier(event.market) is not None:
+        return event
+
+    prior = event.market_probability if event.market_probability is not None else 0.5
+    scout_probability = timeline_probability(event, "scout_adjusted") or prior
+    product_like = any(
+        term in event.market.question.lower()
+        for term in ["airdrop", "mainnet", "testnet", "tge", "launch", "release"]
+    )
+    if product_like:
+        diagnostics = build_product_release_model(event.market, [])
+        model_type = EventModelType.PRODUCT_RELEASE.value
+        update = {"product_release": diagnostics}
+        timeline_label = "product_release_model"
+    else:
+        diagnostics = build_general_event_model(event.market)
+        model_type = EventModelType.GENERAL_EVENT.value
+        update = {"general_event": diagnostics}
+        timeline_label = "general_event_model"
+
+    operon_probability = combine_probabilities(
+        scout_probability=scout_probability,
+        model_probability=diagnostics.posterior_probability,
+    )
+    repaired = event.model_copy(
+        update={
+            "model_type": model_type,
+            "operon_probability": operon_probability,
+            "financial_barrier": None,
+            "macro_policy": None,
+            "election_polling": None,
+            "sports_outright": None,
+            "logic_consistency": None,
+            "data_sources": [],
+            "model_inputs": [],
+            "probability_timeline": [
+                {"label": "market_prior", "probability": prior},
+                {"label": "scout_adjusted", "probability": scout_probability},
+                {"label": timeline_label, "probability": diagnostics.posterior_probability},
+                {"label": "combined_posterior", "probability": operon_probability},
+            ],
+            "evidence_items": event.evidence_items
+            + [
+                "Automatic repair: financial barrier parser rejected this market after "
+                "stricter validation, so the event was rerouted conservatively."
+            ],
+            **update,
+        }
+    )
+    EVENT_STORE[repaired.id] = repaired
+    save_events()
+    return repaired
+
+
+def timeline_probability(event: EventDraft, label: str) -> float | None:
+    for point in event.probability_timeline:
+        if point.get("label") == label:
+            value = point.get("probability")
+            return float(value) if isinstance(value, int | float) else None
+    return None
 
 
 def build_data_sources(

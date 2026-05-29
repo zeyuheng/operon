@@ -15,6 +15,28 @@ ASSET_ALIASES = {
     "eth": ("ethereum", "ETH"),
 }
 
+PRICE_PATTERN = re.compile(
+    r"(?:(?:hit|reach|touch|above|over|exceed|break|cross|to|at)\s+)"
+    r"\$?\s*([\d,]+(?:\.\d+)?)\s*(m|million|k|thousand)?\b"
+    r"|"
+    r"\$\s*([\d,]+(?:\.\d+)?)\s*(m|million|k|thousand)?\b",
+    re.IGNORECASE,
+)
+
+NON_PRICE_EVENT_TERMS = {
+    "airdrop",
+    "token generation",
+    "tge",
+    "mainnet",
+    "testnet",
+    "launch",
+    "release",
+    "listing",
+    "list on",
+    "perform",
+    "claim",
+}
+
 
 @dataclass(frozen=True)
 class BarrierSpec:
@@ -25,18 +47,24 @@ class BarrierSpec:
 
 def parse_financial_barrier(market: Market) -> BarrierSpec | None:
     text = f"{market.question} {market.description or ''}".lower()
-    asset = next((value for key, value in ASSET_ALIASES.items() if key in text), None)
+    if any(term in text for term in NON_PRICE_EVENT_TERMS) and not has_price_language(text):
+        return None
+
+    asset = next(
+        (value for key, value in ASSET_ALIASES.items() if has_asset_token(text, key)),
+        None,
+    )
     if asset is None:
         return None
 
-    price_match = re.search(
-        r"\$?\s*(\d+(?:\.\d+)?)\s*(m|million|k|thousand)?", market.question.lower()
-    )
+    price_match = PRICE_PATTERN.search(market.question.lower())
     if price_match is None:
         return None
 
-    raw_value = float(price_match.group(1))
-    suffix = price_match.group(2)
+    raw_value = float((price_match.group(1) or price_match.group(3)).replace(",", ""))
+    suffix = price_match.group(2) or price_match.group(4)
+    if suffix is None and raw_value < 100:
+        return None
     multiplier = 1.0
     if suffix in {"m", "million"}:
         multiplier = 1_000_000.0
@@ -49,6 +77,16 @@ def parse_financial_barrier(market: Market) -> BarrierSpec | None:
         asset_symbol=symbol,
         barrier_price=raw_value * multiplier,
     )
+
+
+def has_asset_token(text: str, alias: str) -> bool:
+    if alias in {"btc", "eth"}:
+        return re.search(rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])", text) is not None
+    return re.search(rf"\b{re.escape(alias)}\b", text) is not None
+
+
+def has_price_language(text: str) -> bool:
+    return PRICE_PATTERN.search(text) is not None
 
 
 def estimate_annualized_volatility(prices: list[float], fallback: float = 0.75) -> float:

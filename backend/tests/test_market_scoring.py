@@ -72,3 +72,19 @@ def test_score_market_recognizes_sports_outright() -> None:
     assert candidate.model_type == "sports_outright"
     assert candidate.category_guess == "sports"
     assert candidate.evidence_score > 0.8
+
+
+def test_score_market_does_not_treat_airdrop_deadline_as_price_barrier() -> None:
+    candidate = score_market(
+        Market(
+            id="megaeth",
+            question="Will MegaETH perform an airdrop by June 30?",
+            category="crypto",
+            volume=1_000_000,
+            liquidity=50_000,
+            market_probability=0.18,
+        )
+    )
+
+    assert candidate.model_type == "product_release"
+    assert "fit=0.78" in candidate.reason

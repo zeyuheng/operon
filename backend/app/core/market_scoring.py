@@ -1,5 +1,6 @@
 import math
 
+from app.core.financial_barrier_model import parse_financial_barrier
 from app.core.model_router import route_model
 from app.core.rule_parser import RuleType, parse_market_rule
 from app.schemas.market import Market, MarketCandidate
@@ -30,7 +31,9 @@ def evidence_availability_score(market: Market) -> float:
 
 def category_guess(market: Market) -> str:
     text = f"{market.question} {market.category or ''}".lower()
-    if any(term in text for term in ["btc", "bitcoin", "eth", "ethereum", "crypto"]):
+    if any(term in text for term in ["airdrop", "mainnet", "testnet", "tge"]):
+        return "technology"
+    if any(term in text for term in ["btc", "bitcoin", " eth ", "ethereum", "crypto"]):
         return "crypto"
     if any(term in text for term in ["fed", "cpi", "inflation", "rate"]):
         return "economics"
@@ -87,11 +90,14 @@ def resolution_clarity_score(market: Market) -> float:
 
 def model_fit_score(market: Market) -> float:
     text = f"{market.question} {market.category or ''}".lower()
-    if any(term in text for term in ["btc", "bitcoin", "eth", "ethereum", "$"]):
+    if parse_financial_barrier(market) is not None:
         return 0.92
     if any(term in text for term in ["fed", "cpi", "rate", "inflation"]):
         return 0.84
-    if any(term in text for term in ["openai", "ai", "model", "launch", "release"]):
+    if any(
+        term in text
+        for term in ["openai", "ai", "model", "launch", "release", "airdrop", "mainnet", "tge"]
+    ):
         return 0.78
     if any(
         term in text
