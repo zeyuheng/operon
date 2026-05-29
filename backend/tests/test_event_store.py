@@ -52,7 +52,8 @@ def test_election_data_sources_expose_missing_integrations() -> None:
         source.name == "Polymarket market price" and source.status == "connected"
         for source in sources
     )
+    assert any(source.name == "FiveThirtyEight primary polls" for source in sources)
     assert any(
-        source.name == "Pollster database" and source.status == "planned"
+        source.name == "FEC fundraising API" and source.status == "key_required"
         for source in sources
     )

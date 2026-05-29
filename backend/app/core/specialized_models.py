@@ -181,10 +181,13 @@ def macro_event_direction(text: str) -> float:
 def build_election_polling_model(
     market: Market,
     evidence: list[EvidenceObservation] | None = None,
+    poll_samples: list[PollSample] | None = None,
 ) -> ModelDiagnostics:
     market_consensus = prior(market)
     evidence = evidence or []
-    polls = derive_poll_samples(market, evidence)
+    polls = poll_samples or derive_poll_samples(market, evidence)
+    if not polls:
+        polls = derive_poll_samples(market, evidence)
     polling_average, poll_weight = weighted_polling_average(polls)
     field_score = candidate_field_score(market, evidence)
     recency_weight = clamp(poll_weight / max(len(polls), 1))
@@ -222,7 +225,14 @@ def build_election_polling_model(
             "Adds candidate-field adjustment for entry/exit, endorsements, and consolidation.",
         ],
         notes=[
-            "If no external polls are loaded, market price becomes a low-weight consensus poll.",
+            (
+                "External polling samples were loaded."
+                if poll_samples
+                else (
+                    "If no external polls are loaded, market price becomes a "
+                    "low-weight consensus poll."
+                )
+            ),
             "Next upgrade: live poll ingestion, delegate simulation, fundraising, endorsements.",
         ],
     )
@@ -231,10 +241,13 @@ def build_election_polling_model(
 def build_sports_outright_model(
     market: Market,
     evidence: list[EvidenceObservation] | None = None,
+    rating_samples: list[SportsRatingSample] | None = None,
 ) -> ModelDiagnostics:
     market_consensus = prior(market)
     evidence = evidence or []
-    ratings = derive_sports_ratings(market, evidence)
+    ratings = rating_samples or derive_sports_ratings(market, evidence)
+    if not ratings:
+        ratings = derive_sports_ratings(market, evidence)
     team_strength_proxy = ratings[0].rating
     season_stage_certainty = clamp(1.0 - days_remaining(market) / 365)
     injury_depth_uncertainty = injury_uncertainty(evidence)
@@ -267,7 +280,14 @@ def build_sports_outright_model(
             "Adjusts confidence for season stage, path clarity, and injury uncertainty.",
         ],
         notes=[
-            "If no standings/odds feeds are loaded, ratings are synthesized from market prior.",
+            (
+                "External team rating samples were loaded."
+                if rating_samples
+                else (
+                    "If no standings/odds feeds are loaded, ratings are synthesized "
+                    "from market prior."
+                )
+            ),
             "Next upgrade: team ratings, bracket path, injuries, and bookmaker consensus.",
         ],
     )

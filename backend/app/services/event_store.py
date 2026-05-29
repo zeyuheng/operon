@@ -26,11 +26,13 @@ from app.schemas.market import (
     ModelInput,
 )
 from app.services.crypto_price_service import CryptoPriceService
+from app.services.election_data_service import ElectionDataService, ElectionDataSnapshot
 from app.services.evidence_collector import EvidenceCollector
 from app.services.evidence_extractor import EvidenceExtractor
 from app.services.macro_data_service import MacroDataService, MacroSnapshot
 from app.services.product_evidence_service import ProductEvidenceService
 from app.services.research_planner_service import ResearchPlannerService
+from app.services.sports_data_service import SportsDataService, SportsDataSnapshot
 
 EVENT_STORE: dict[str, EventDraft] = {}
 EVENT_STORE_PATH = Path(__file__).resolve().parents[2] / "data" / "events.json"
@@ -99,6 +101,8 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
     sports_outright = None
     logic_consistency = None
     general_event = None
+    election_snapshot = None
+    sports_snapshot = None
     model_confidence = 0.35
     if candidate.model_type == "financial_barrier":
         financial_barrier = await run_financial_barrier_model(candidate)
@@ -166,7 +170,15 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
             "and macro-state placeholders."
         )
     elif candidate.model_type == "election_polling":
-        election_polling = build_election_polling_model(candidate.market, observations)
+        election_snapshot = await fetch_election_snapshot(
+            candidate,
+            research_plan.understanding.target_entity,
+        )
+        election_polling = build_election_polling_model(
+            candidate.market,
+            observations,
+            poll_samples=election_snapshot.polls,
+        )
         model_confidence = election_polling.confidence
         operon_probability = combine_probabilities(
             scout_probability=operon_probability,
@@ -178,11 +190,16 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
             election_polling.posterior_probability,
         )
         evidence_items.append(
-            "Election model used market consensus as a polling proxy until poll ingestion "
-            "is connected."
+            "Election model loaded FiveThirtyEight public polling data when available; "
+            "otherwise it falls back to market consensus."
         )
     elif candidate.model_type == "sports_outright":
-        sports_outright = build_sports_outright_model(candidate.market, observations)
+        sports_snapshot = await fetch_sports_snapshot(candidate)
+        sports_outright = build_sports_outright_model(
+            candidate.market,
+            observations,
+            rating_samples=sports_snapshot.ratings,
+        )
         model_confidence = sports_outright.confidence
         operon_probability = combine_probabilities(
             scout_probability=operon_probability,
@@ -194,8 +211,8 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
             sports_outright.posterior_probability,
         )
         evidence_items.append(
-            "Sports outright model used market consensus as a team-strength prior until "
-            "standings, injuries, and odds feeds are connected."
+            "Sports outright model loaded ESPN public team records when available; "
+            "otherwise it falls back to market-implied strength."
         )
     elif candidate.model_type == "logic_consistency":
         logic_consistency = build_logic_consistency_model(candidate.market)
@@ -247,11 +264,15 @@ async def promote_candidate_to_event(candidate: MarketCandidate) -> EventDraft:
         observations=observations,
         financial_barrier=financial_barrier,
         diagnostics=active_diagnostics,
+        election_snapshot=election_snapshot,
+        sports_snapshot=sports_snapshot,
     )
     model_inputs = build_model_inputs(
         candidate=candidate,
         financial_barrier=financial_barrier,
         diagnostics=active_diagnostics,
+        election_snapshot=election_snapshot,
+        sports_snapshot=sports_snapshot,
     )
 
     event = EventDraft(
@@ -319,6 +340,29 @@ async def fetch_macro_snapshot() -> MacroSnapshot:
         return await MacroDataService().fetch_snapshot()
     except Exception:
         return MacroSnapshot(data_source="fallback empty macro snapshot")
+
+
+async def fetch_election_snapshot(
+    candidate: MarketCandidate,
+    target_entity: str | None,
+) -> ElectionDataSnapshot:
+    try:
+        return await ElectionDataService().fetch_snapshot(candidate.market, target_entity)
+    except Exception:
+        return ElectionDataSnapshot(
+            status="fallback",
+            note="FiveThirtyEight polling fetch failed; using market consensus proxy.",
+        )
+
+
+async def fetch_sports_snapshot(candidate: MarketCandidate) -> SportsDataSnapshot:
+    try:
+        return await SportsDataService().fetch_snapshot(candidate.market)
+    except Exception:
+        return SportsDataSnapshot(
+            status="fallback",
+            note="ESPN team-record fetch failed; using market-implied team strength.",
+        )
 
 
 def combine_probabilities(scout_probability: float, model_probability: float) -> float:
@@ -390,6 +434,8 @@ def build_data_sources(
     observations: list[EvidenceObservation],
     financial_barrier: FinancialBarrierDiagnostics | None,
     diagnostics: ModelDiagnostics | None,
+    election_snapshot: ElectionDataSnapshot | None = None,
+    sports_snapshot: SportsDataSnapshot | None = None,
 ) -> list[DataSourceStatus]:
     sources = [
         DataSourceStatus(
@@ -510,28 +556,29 @@ def build_data_sources(
             )
         )
     elif candidate.model_type == "election_polling":
+        election_snapshot = election_snapshot or ElectionDataSnapshot(
+            status="planned",
+            note="Polling service was not run for this event.",
+        )
         sources.extend(
             [
                 DataSourceStatus(
-                    name="Pollster database",
-                    status="planned",
+                    name="FiveThirtyEight primary polls",
+                    status=election_snapshot.status,
                     source_type="polling_api",
                     used_for=["weighted_polling_average", "pollster_quality", "recency_weight"],
                     variables=["poll_support", "sample_size", "pollster_quality", "field_date"],
-                    reliability=0.0,
-                    note=(
-                        "Not connected yet. Current polling average falls back to "
-                        "Polymarket consensus."
-                    ),
+                    reliability=0.75 if election_snapshot.polls else 0.25,
+                    note=election_snapshot.note,
                 ),
                 DataSourceStatus(
-                    name="Fundraising and endorsements",
-                    status="planned",
+                    name="FEC fundraising API",
+                    status="key_required",
                     source_type="election_data",
                     used_for=["candidate_field_strength"],
                     variables=["fundraising", "endorsements", "candidate_entry_exit"],
                     reliability=0.0,
-                    note="Not connected yet. Candidate-field adjustment is conservative.",
+                    note="Requires a FEC API key and candidate/committee mapping.",
                 ),
                 DataSourceStatus(
                     name="Delegate simulation",
@@ -545,34 +592,38 @@ def build_data_sources(
             ]
         )
     elif candidate.model_type == "sports_outright":
+        sports_snapshot = sports_snapshot or SportsDataSnapshot(
+            status="planned",
+            note="Sports data service was not run for this event.",
+        )
         sources.extend(
             [
                 DataSourceStatus(
-                    name="Team Elo / power rating feed",
-                    status="planned",
+                    name="ESPN team records",
+                    status=sports_snapshot.status,
                     source_type="sports_rating_api",
                     used_for=["team_strength_proxy", "field_ratings"],
-                    variables=["elo", "net_rating", "strength_of_schedule"],
-                    reliability=0.0,
-                    note="Not connected yet. Team strength currently uses market-implied proxy.",
+                    variables=["win_percentage", "record_power_proxy"],
+                    reliability=0.65 if sports_snapshot.ratings else 0.25,
+                    note=sports_snapshot.note,
                 ),
                 DataSourceStatus(
                     name="Injury feed",
-                    status="planned",
+                    status="key_required",
                     source_type="sports_injury_api",
                     used_for=["injury_depth_uncertainty"],
                     variables=["player_status", "minutes_value", "return_timeline"],
                     reliability=0.0,
-                    note="Not connected yet. Injury risk remains a broad uncertainty adjustment.",
+                    note="Requires a licensed injury or player availability feed.",
                 ),
                 DataSourceStatus(
                     name="Bookmaker odds consensus",
-                    status="planned",
+                    status="key_required",
                     source_type="odds_api",
                     used_for=["bookmaker_implied_power", "market_gap"],
                     variables=["title_odds", "series_odds", "implied_probability"],
                     reliability=0.0,
-                    note="Not connected yet. Polymarket is the only market-pricing input.",
+                    note="Requires an odds API key or licensed sportsbook odds feed.",
                 ),
             ]
         )
@@ -595,6 +646,8 @@ def build_model_inputs(
     candidate: MarketCandidate,
     financial_barrier: FinancialBarrierDiagnostics | None,
     diagnostics: ModelDiagnostics | None,
+    election_snapshot: ElectionDataSnapshot | None = None,
+    sports_snapshot: SportsDataSnapshot | None = None,
 ) -> list[ModelInput]:
     inputs = [
         ModelInput(
@@ -661,8 +714,18 @@ def build_model_inputs(
                 ModelInput(
                     name=name,
                     value=value,
-                    source=input_source_for(candidate.model_type, name),
-                    status=input_status_for(candidate.model_type, name),
+                    source=input_source_for(
+                        candidate.model_type,
+                        name,
+                        election_snapshot=election_snapshot,
+                        sports_snapshot=sports_snapshot,
+                    ),
+                    status=input_status_for(
+                        candidate.model_type,
+                        name,
+                        election_snapshot=election_snapshot,
+                        sports_snapshot=sports_snapshot,
+                    ),
                     role=input_role_for(name),
                     note=input_note_for(candidate.model_type, name),
                 )
@@ -670,7 +733,12 @@ def build_model_inputs(
     return inputs
 
 
-def input_source_for(model_type: str, name: str) -> str:
+def input_source_for(
+    model_type: str,
+    name: str,
+    election_snapshot: ElectionDataSnapshot | None = None,
+    sports_snapshot: SportsDataSnapshot | None = None,
+) -> str:
     if name == "market_consensus" or name == "market_expectation":
         return "Polymarket market price"
     if model_type == "macro_policy":
@@ -678,17 +746,30 @@ def input_source_for(model_type: str, name: str) -> str:
     if model_type == "product_release":
         return "Official/product web sources and market text"
     if model_type == "election_polling":
+        if election_snapshot and election_snapshot.polls:
+            return "FiveThirtyEight primary polls"
         return "Polymarket proxy until pollster database is connected"
     if model_type == "sports_outright":
+        if sports_snapshot and sports_snapshot.ratings:
+            return "ESPN team records"
         return "Polymarket proxy until sports data feeds are connected"
     if model_type == "logic_consistency":
         return "Planned related-market graph"
     return "Market text and generic evidence"
 
 
-def input_status_for(model_type: str, name: str) -> str:
+def input_status_for(
+    model_type: str,
+    name: str,
+    election_snapshot: ElectionDataSnapshot | None = None,
+    sports_snapshot: SportsDataSnapshot | None = None,
+) -> str:
     if name in {"market_consensus", "market_expectation"}:
         return "connected"
+    if model_type == "election_polling":
+        return "connected" if election_snapshot and election_snapshot.polls else "proxy"
+    if model_type == "sports_outright":
+        return "connected" if sports_snapshot and sports_snapshot.ratings else "proxy"
     if model_type in {"election_polling", "sports_outright"}:
         return "proxy"
     if model_type == "logic_consistency":
